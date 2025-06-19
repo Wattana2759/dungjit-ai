@@ -289,5 +289,5 @@ def success_page():
     return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
 if __name__ == "__main__":    
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    
 
