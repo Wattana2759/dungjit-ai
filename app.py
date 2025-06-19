@@ -1,256 +1,105 @@
 from flask import Flask, request, jsonify, render_template, Response
-from openai import OpenAI
 import os
-import requests
-from datetime import datetime
 from dotenv import load_dotenv
+import requests
+from openai import OpenAI
 from PIL import Image
 import pytesseract
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from db_setup import User, Log
+import re
 import gspread
 from google.oauth2.service_account import Credentials
-import json
-import re
+import base64
 
 load_dotenv()
+
 app = Flask(__name__)
 
-# === ENV & Setup ===
+# === ENV & SETUP ===
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
+SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
+SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
 LIFF_ID = os.getenv("LIFF_ID")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
-GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
-client = OpenAI(api_key=OPENAI_API_KEY)
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
-# === Google Sheets Auth ===
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-creds = Credentials.from_service_account_file("/etc/secrets/GOOGLE_CREDS_JSON", scopes=SCOPES)
-gc = gspread.authorize(creds)
-users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet("Users")
-logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet("Logs")
+# OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
 
+# === DATABASE ===
+engine = create_engine('sqlite:///db.sqlite')
+Session = sessionmaker(bind=engine)
+
+# === GOOGLE SHEET CREDENTIAL ===
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+creds = Credentials.from_service_account_file(
+    '/etc/secrets/GOOGLE_CREDS_JSON', scopes=SCOPES
+)
+gc = gspread.authorize(creds)
+users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
+logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
+
+# === BASIC AUTH ===
 def require_basic_auth():
     auth = request.authorization
     if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
-        return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
+        return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Login Required'"})
 
-# === User Functions ===
-def get_user(user_id):
-    records = users_sheet.get_all_records()
-    for i, row in enumerate(records):
-        if row["user_id"] == user_id:
-            return row, i + 2
-    return None, None
+# === ROUTES ===
+@app.route('/')
+def index():
+    return "🧠 ดวงจิต AI พร้อมใช้งาน"
 
-def update_user(user_id, usage=None, quota=None):
-    _, row = get_user(user_id)
-    if row:
-        if usage is not None:
-            users_sheet.update_cell(row, 3, usage)
-        if quota is not None:
-            users_sheet.update_cell(row, 4, quota)
+@app.route('/admin')
+def admin_dashboard():
+    auth = require_basic_auth()
+    if auth: return auth
+    return render_template("admin.html")
 
-def add_or_update_user(user_id, name, added_quota, slip_file):
-    user, row = get_user(user_id)
-    now = datetime.now().isoformat()
-    if user:
-        new_quota = user["paid_quota"] + added_quota
-        users_sheet.update(f"C{row}:F{row}", [[user["usage"], new_quota, slip_file, now]])
-    else:
-        users_sheet.append_row([user_id, "new", 0, added_quota, slip_file, now])
-
-def log_usage(user_id, action, detail):
-    now = datetime.now().isoformat()
-    logs_sheet.append_row([now, user_id, action, detail])
-
-# === Messaging ===
-def send_line_message(reply_token, text):
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
-    body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
-def push_line_message(user_id, text):
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
-    body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
-
-def send_payment_request(user_id):
-    flex_qr = {
-        "type": "flex",
-        "altText": "กรุณาชำระเงินก่อนแนบสลิป",
-        "contents": {
-            "type": "bubble",
-            "hero": {
-                "type": "image",
-                "url": f"{PUBLIC_URL}/static/qr_promptpay.png",
-                "size": "full",
-                "aspectRatio": "1:1",
-                "aspectMode": "cover"
-            },
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {"type": "text", "text": "📌 สแกนจ่ายผ่าน PromptPay", "weight": "bold", "size": "md"},
-                    {"type": "text", "text": "บัญชี: นาย วัฒนา จันดาหาร", "size": "sm", "wrap": True},
-                    {"type": "text", "text": "คำถามละ 1 บาท — แนบสลิปภายหลัง", "size": "sm", "wrap": True}
-                ]
-            }
-        }
-    }
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_qr]})
-
-def send_flex_upload_link(user_id):
-    flex_message = {
-        "type": "flex",
-        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน ดวงจิต AI คำถามละ 1 บาท เท่านั้น!",
-        "contents": {
-            "type": "bubble",
-            "hero": {
-                "type": "image",
-                "url": f"{PUBLIC_URL}/static/banner.jpg",
-                "size": "full",
-                "aspectRatio": "16:9",
-                "aspectMode": "cover"
-            },
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "แนบสลิปเพื่อรับสิทธิ์ใช้งานดวงจิต หมอดู AI",
-                        "weight": "bold",
-                        "size": "md",
-                        "wrap": True
-                    }
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "spacing": "sm",
-                "contents": [
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "color": "#06c755",
-                        "action": {
-                            "type": "uri",
-                            "label": "แนบสลิปตอนนี้",
-                            "uri": f"{PUBLIC_URL}/upload-slip-liff"
-                        }
-                    }
-                ]
-            }
-        }
-    }
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
-
-# === Fortune ===
-def get_fortune(message):
-    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
-    try:
-        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print("❌ OpenAI Error:", e)
-        return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
-
-# === OCR ===
-def extract_payment_info(text):
-    name = re.search(r'(ชื่อ[^\n\r]+)', text)
-    amount = re.search(r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?', text)
-    return {
-        'amount': amount.group(1).replace(',', '') if amount else None,
-        'name': name.group(1).strip() if name else None
-    }
-
-@app.route("/")
-def home():
-    return "ดวงจิต AI พร้อมใช้งานแล้ว"
-
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.json
-    if "events" not in data:
-        return jsonify(status="ignored")
-
-    for event in data["events"]:
-        reply_token = event["replyToken"]
-        user_id = event["source"]["userId"]
-        if event.get("deliveryContext", {}).get("isRedelivery"):
-            continue
-
-        user, _ = get_user(user_id)
-
-        if event["type"] == "follow":
-            push_line_message(user_id, "🙏 ยินดีต้อนรับสู่ ดวงจิต AI!")
-            return jsonify(status="followed")
-
-        if event["type"] == "message":
-            try:
-                message_text = event["message"]["text"]
-            except KeyError:
-                send_line_message(reply_token, "ระบบรองรับเฉพาะข้อความค่ะ")
-                continue
-
-            if message_text.strip().lower() == "/ดูสิทธิ์":
-                if not user:
-                    send_line_message(reply_token, "คุณยังไม่มีสิทธิ์ใช้งาน")
-                else:
-                    send_line_message(reply_token, f"คุณใช้ไปแล้ว {user['usage']} ครั้ง / {user['paid_quota']} ครั้ง")
-                continue
-
-            if not user or int(user["paid_quota"]) <= int(user["usage"]):
-                push_line_message(user_id, "💸 กรุณาชำระเงิน (1 บาท = 1 คำถาม)")
-                send_payment_request(user_id)
-                send_flex_upload_link(user_id)
-                continue
-
-            reply = get_fortune(message_text)
-            send_line_message(reply_token, reply)
-            update_user(user_id, usage=int(user["usage"]) + 1)
-            log_usage(user_id, "ใช้สิทธิ์", message_text)
-
-    return jsonify(status="ok")
-
-@app.route("/upload-slip", methods=["GET", "POST"])
+@app.route('/upload-slip', methods=['GET', 'POST'])
 def upload_slip():
-    if request.method == "POST":
-        user_id = request.form.get("user_id")
-        user_name = request.form.get("user_name")
-        file = request.files.get("file")
-        if not user_id or not file:
-            return "กรุณากรอกข้อมูลให้ครบ", 400
+    if request.method == 'POST':
+        image = request.files['slip']
+        if image:
+            img = Image.open(image.stream)
+            text = pytesseract.image_to_string(img, lang='tha+eng')
 
-        filename = f"slip_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-        os.makedirs("static/slips", exist_ok=True)
-        path = f"static/slips/{filename}"
-        file.save(path)
+            amount_match = re.search(r'(\d+[,.]?\d*)\s*(บาท|THB)', text)
+            name_match = re.search(r'(นาย|นางสาว|บริษัท|คุณ)\s?\S+', text)
 
-        ocr_text = pytesseract.image_to_string(Image.open(path), lang="eng+tha")
-        info = extract_payment_info(ocr_text)
-        amount_paid = int(float(info['amount'])) if info['amount'] else 0
+            amount = amount_match.group(1) if amount_match else "ไม่พบจำนวนเงิน"
+            name = name_match.group(0) if name_match else "ไม่พบชื่อ"
 
-        add_or_update_user(user_id, user_name, amount_paid, filename)
-        push_line_message(user_id, f"📥 ได้รับสลิปแล้ว เพิ่มสิทธิ์ {amount_paid} ครั้งเรียบร้อย ✅")
-        log_usage(user_id, "แนบสลิป", f"OCR: {info}")
-        return render_template("success.html", user_id=user_id)
+            return jsonify({"name": name, "amount": amount})
+        return "ไม่พบรูปภาพ", 400
+    return render_template("upload_slip.html", liff_id=LIFF_ID)
 
-    return render_template("upload_form.html")
+# === WEBHOOK ===
+@app.route("/webhook", methods=['POST'])
+def webhook():
+    payload = request.get_json()
+    # จะเพิ่ม logic การรับข้อความ LINE + สื่อสารกับ OpenAI หรือระบบดวงได้ที่นี่
+    return jsonify({"status": "ok"})
 
-@app.route("/upload-slip-liff")
-def upload_slip_liff():
-    return render_template("upload_slip_liff.html", liff_id=LIFF_ID)
+# === DEBUG OCR แบบ Base64 (optional สำหรับ POST image via JS) ===
+@app.route('/ocr', methods=['POST'])
+def ocr_base64():
+    data = request.get_json()
+    base64_img = data.get('image_base64')
+    if base64_img:
+        img_data = base64.b64decode(base64_img.split(',')[-1])
+        img = Image.open(io.BytesIO(img_data))
+        text = pytesseract.image_to_string(img, lang='tha+eng')
+        return jsonify({"text": text})
+    return jsonify({"error": "ไม่พบภาพ base64"}), 400
 
-@app.route("/success")
-def success_page():
-    return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
-
-application = app
+# === RUN ===
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0')
 
