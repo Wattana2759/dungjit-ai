@@ -287,7 +287,8 @@ def review_slip_action():
 @app.route("/success")
 def success_page():
     return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
-    application = app
+    
+application = app
 
 
 
