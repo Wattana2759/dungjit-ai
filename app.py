@@ -14,33 +14,33 @@ import re
 load_dotenv()
 app = Flask(__name__)
 
-# === ENV ===
+# === ENV & Setup ===
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LIFF_ID = os.getenv("LIFF_ID")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
-GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
-# === Google Sheets ===
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+# === Google Sheets Auth using Secret File ===
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-creds_dict = json.loads(GOOGLE_CREDS_JSON)
+with open("/etc/secrets/GOOGLE_CREDS_JSON") as f:
+    creds_dict = json.load(f)
 creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
 gc = gspread.authorize(creds)
 users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet("Users")
 logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet("Logs")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
-
-# === Auth ===
+# === Basic Auth ===
 def require_basic_auth():
     auth = request.authorization
     if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
         return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
 
-# === Sheet helper ===
+# === User Functions ===
 def get_user(user_id):
     records = users_sheet.get_all_records()
     for i, row in enumerate(records):
@@ -69,14 +69,14 @@ def log_usage(user_id, action, detail):
     now = datetime.now().isoformat()
     logs_sheet.append_row([now, user_id, action, detail])
 
-# === LINE Messaging ===
+# === Messaging ===
 def send_line_message(reply_token, text):
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
     body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
 def push_line_message(user_id, text):
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
@@ -98,19 +98,19 @@ def send_payment_request(user_id):
                 "layout": "vertical",
                 "contents": [
                     {"type": "text", "text": "📌 สแกนจ่ายผ่าน PromptPay", "weight": "bold", "size": "md"},
-                    {"type": "text", "text": "บัญชี: นาย วัฒนา จันดาหาร", "size": "sm"},
-                    {"type": "text", "text": "คำถามละ 1 บาท — แนบสลิปภายหลัง", "size": "sm"}
+                    {"type": "text", "text": "บัญชี: นาย วัฒนา จันดาหาร", "size": "sm", "wrap": True},
+                    {"type": "text", "text": "คำถามละ 1 บาท — แนบสลิปภายหลัง", "size": "sm", "wrap": True}
                 ]
             }
         }
     }
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_qr]})
 
 def send_flex_upload_link(user_id):
-    flex = {
+    flex_message = {
         "type": "flex",
-        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน ดวงจิต AI",
+        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน ดวงจิต AI คำถามละ 1 บาท เท่านั้น!",
         "contents": {
             "type": "bubble",
             "hero": {
@@ -124,16 +124,24 @@ def send_flex_upload_link(user_id):
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    {"type": "text", "text": "แนบสลิปเพื่อรับสิทธิ์ใช้งาน", "weight": "bold", "size": "md"}
+                    {
+                        "type": "text",
+                        "text": "แนบสลิปเพื่อรับสิทธิ์ใช้งานดวงจิต หมอดู AI",
+                        "weight": "bold",
+                        "size": "md",
+                        "wrap": True
+                    }
                 ]
             },
             "footer": {
                 "type": "box",
                 "layout": "vertical",
+                "spacing": "sm",
                 "contents": [
                     {
                         "type": "button",
                         "style": "primary",
+                        "color": "#06c755",
                         "action": {
                             "type": "uri",
                             "label": "แนบสลิปตอนนี้",
@@ -144,8 +152,18 @@ def send_flex_upload_link(user_id):
             }
         }
     }
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex]})
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
+
+# === Fortune ===
+def get_fortune(message):
+    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
+    try:
+        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print("❌ OpenAI Error:", e)
+        return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
 
 # === OCR ===
 def extract_payment_info(text):
@@ -156,19 +174,55 @@ def extract_payment_info(text):
         'name': name.group(1).strip() if name else None
     }
 
-# === AI Fortune ===
-def get_fortune(message):
-    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ ตอบเรื่องดวง ความรัก การเงิน ความฝันอย่างสุภาพ\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
-    try:
-        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return "⚠️ ระบบหมอดูขัดข้อง กรุณาลองใหม่"
-
-# === Routes ===
+# === ROUTES ===
 @app.route("/")
-def index():
-    return "🔮 ดวงจิต AI พร้อมใช้งาน"
+def home():
+    return "ดวงจิต AI พร้อมใช้งานแล้ว"
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.json
+    if "events" not in data:
+        return jsonify(status="ignored")
+
+    for event in data["events"]:
+        reply_token = event["replyToken"]
+        user_id = event["source"]["userId"]
+        if event.get("deliveryContext", {}).get("isRedelivery"):
+            continue
+
+        user, _ = get_user(user_id)
+
+        if event["type"] == "follow":
+            push_line_message(user_id, "🙏 ยินดีต้อนรับสู่ ดวงจิต AI!")
+            return jsonify(status="followed")
+
+        if event["type"] == "message":
+            try:
+                message_text = event["message"]["text"]
+            except KeyError:
+                send_line_message(reply_token, "ระบบรองรับเฉพาะข้อความค่ะ")
+                continue
+
+            if message_text.strip().lower() == "/ดูสิทธิ์":
+                if not user:
+                    send_line_message(reply_token, "คุณยังไม่มีสิทธิ์ใช้งาน")
+                else:
+                    send_line_message(reply_token, f"คุณใช้ไปแล้ว {user['usage']} ครั้ง / {user['paid_quota']} ครั้ง")
+                continue
+
+            if not user or int(user["paid_quota"]) <= int(user["usage"]):
+                push_line_message(user_id, "💸 กรุณาชำระเงิน (1 บาท = 1 คำถาม)")
+                send_payment_request(user_id)
+                send_flex_upload_link(user_id)
+                continue
+
+            reply = get_fortune(message_text)
+            send_line_message(reply_token, reply)
+            update_user(user_id, usage=int(user["usage"]) + 1)
+            log_usage(user_id, "ใช้สิทธิ์", message_text)
+
+    return jsonify(status="ok")
 
 @app.route("/upload-slip", methods=["GET", "POST"])
 def upload_slip():
@@ -199,52 +253,13 @@ def upload_slip():
 def upload_slip_liff():
     return render_template("upload_slip_liff.html", liff_id=LIFF_ID)
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.json
-    if "events" not in data:
-        return jsonify(status="ignored")
-
-    for event in data["events"]:
-        reply_token = event["replyToken"]
-        user_id = event["source"]["userId"]
-
-        if event.get("deliveryContext", {}).get("isRedelivery"):
-            continue
-
-        user, _ = get_user(user_id)
-
-        if event["type"] == "follow":
-            push_line_message(user_id, "🙏 ยินดีต้อนรับสู่ ดวงจิต AI!")
-            continue
-
-        if event["type"] == "message":
-            message_text = event["message"].get("text", "").strip()
-            if message_text.lower() == "/ดูสิทธิ์":
-                if not user:
-                    send_line_message(reply_token, "คุณยังไม่มีสิทธิ์ใช้งาน")
-                else:
-                    send_line_message(reply_token, f"คุณใช้ไปแล้ว {user['usage']} / {user['paid_quota']} ครั้ง")
-                continue
-
-            if not user or int(user["paid_quota"]) <= int(user["usage"]):
-                push_line_message(user_id, "💸 กรุณาชำระเงิน (1 บาท = 1 คำถาม)")
-                send_payment_request(user_id)
-                send_flex_upload_link(user_id)
-                continue
-
-            reply = get_fortune(message_text)
-            send_line_message(reply_token, reply)
-            update_user(user_id, usage=int(user["usage"]) + 1)
-            log_usage(user_id, "ใช้สิทธิ์", message_text)
-
-    return jsonify(status="ok")
-
 @app.route("/success")
-def success():
+def success_page():
     return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
 
-# === MAIN ===
+# === START ===
+application = app
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
 
