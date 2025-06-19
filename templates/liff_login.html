@@ -1,0 +1,21 @@
+<!-- templates/liff_login.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>เข้าสู่ระบบด้วย LINE</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <h3>กำลังเข้าสู่ระบบผ่าน LINE...</h3>
+  <script>
+    async function main() {
+      await liff.init({ liffId: "{{ liff_id }}" });
+      if (!liff.isLoggedIn()) liff.login();
+      const profile = await liff.getProfile();
+      alert("👤 ยินดีต้อนรับ " + profile.displayName);
+    }
+    main();
+  </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!-- templates/admin_dashboard.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>สถิติการใช้งาน</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h2>กราฟการใช้งานดวงจิต AI (รายวัน)</h2>
+  <canvas id="usageChart" width="600" height="300"></canvas>
+  <script>
+    const ctx = document.getElementById('usageChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: {{ chart_data | map(attribute=0) | list }},
+        datasets: [{
+          label: 'จำนวนครั้งที่ใช้',
+          data: {{ chart_data | map(attribute=1) | list }},
+          backgroundColor: 'rgba(54, 162, 235, 0.6)'
+        }]
+      }
+    });
+  </script>
+</body>
+</html>
+

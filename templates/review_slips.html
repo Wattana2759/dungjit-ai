@@ -1,22 +1,88 @@
-<h1>🖼️ ตรวจสอบสลิป</h1>
+# === templates/review_slips.html ===
+# ใช้ใน /review-slips
 
-{% for user in users %}
-  <div style="margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
-    <strong>{{ user.name or user.id }}</strong><br>
-    <img src="/static/slips/{{ user.slip_file }}" width="300"><br>
-    อัปโหลดเมื่อ: {{ user.last_uploaded }}<br><br>
+<!-- templates/review_slips.html -->
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>Review Slips</title>
+</head>
+<body>
+    <h2>ตรวจสอบสลิป</h2>
+    <table border="1">
+        <tr><th>User ID</th><th>Slip</th><th>Action</th></tr>
+        {% for user in users %}
+        <tr>
+            <td>{{ user['user_id'] }}</td>
+            <td><img src="/static/slips/{{ user['slip'] }}" width="150"></td>
+            <td>
+                <form action="/review-slip-action" method="post">
+                    <input type="hidden" name="user_id" value="{{ user['user_id'] }}">
+                    <button name="action" value="approve">✅ อนุมัติ</button>
+                    <button name="action" value="reject">❌ ปฏิเสธ</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
 
-    <form method="POST" action="/review-slip-action" style="display:inline;">
-      <input type="hidden" name="user_id" value="{{ user.id }}">
-      <input type="hidden" name="action" value="approve">
-      <button type="submit" style="background-color:green;color:white;padding:5px 10px;">✅ อนุมัติ</button>
-    </form>
+# === templates/admin_dashboard.html ===
+# ใช้ใน /admin-dashboard
 
-    <form method="POST" action="/review-slip-action" style="display:inline;">
-      <input type="hidden" name="user_id" value="{{ user.id }}">
-      <input type="hidden" name="action" value="reject">
-      <button type="submit" style="background-color:red;color:white;padding:5px 10px;">❌ ปฏิเสธ</button>
-    </form>
-  </div>
-{% endfor %}
+<!-- templates/admin_dashboard.html -->
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>สถิติการใช้งาน</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h2>กราฟการใช้งานดวงจิต AI (รายวัน)</h2>
+  <canvas id="usageChart" width="600" height="300"></canvas>
+  <script>
+    const ctx = document.getElementById('usageChart');
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: {{ chart_data | map(attribute=0) | list }},
+        datasets: [{
+          label: 'จำนวนครั้งที่ใช้',
+          data: {{ chart_data | map(attribute=1) | list }},
+          backgroundColor: 'rgba(75, 192, 192, 0.6)'
+        }]
+      }
+    });
+  </script>
+</body>
+</html>
+
+# === templates/liff_login.html ===
+# ใช้ใน /liff-login
+
+<!-- templates/liff_login.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>เข้าสู่ระบบด้วย LINE</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <h3>กำลังเข้าสู่ระบบผ่าน LINE...</h3>
+  <script>
+    async function main() {
+      await liff.init({ liffId: "{{ liff_id }}" })
+      if (!liff.isLoggedIn()) liff.login()
+      const profile = await liff.getProfile()
+      alert("👤 สวัสดีคุณ " + profile.displayName)
+      // คุณสามารถส่ง profile.userId หรือชื่อไปเก็บต่อได้ที่นี่
+    }
+    main()
+  </script>
+</body>
+</html>
 
