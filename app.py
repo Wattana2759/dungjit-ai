@@ -287,7 +287,8 @@ def review_slip_action():
 @app.route("/success")
 def success_page():
     return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
-if __name__ == "__main__":    
-    port = int(os.environ.get("PORT", 10000))
+if __name__ == "__main__" and os.environ.get("RENDER") != "true":
+    app.run(host="0.0.0.0", port=10000)
+
     
 
