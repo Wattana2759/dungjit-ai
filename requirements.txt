@@ -7,8 +7,8 @@ pytesseract
 pillow
 sqlalchemy
 python-dotenv
-
 pytesseract
 pillow
 sqlalchemy
 python-dotenv
+gunicorn
