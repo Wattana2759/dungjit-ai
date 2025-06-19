@@ -8,8 +8,6 @@ import pytesseract
 import gspread
 from google.oauth2.service_account import Credentials
 import re
-import io
-import base64
 from openai import OpenAI
 
 # === LOAD ENV ===
@@ -32,16 +30,17 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 # === GOOGLE SHEETS ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 service_account_info = {
-    "type": "service_account",
-    "project_id": os.getenv("GCP_PROJECT_ID"),
-    "private_key_id": os.getenv("GCP_PRIVATE_KEY_ID"),
-    "private_key": os.getenv("GCP_PRIVATE_KEY").replace('\\n', '\n'),
-    "client_email": os.getenv("GCP_CLIENT_EMAIL"),
-    "client_id": os.getenv("GCP_CLIENT_ID"),
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": os.getenv("GCP_CLIENT_X509_CERT_URL"),
+    "type": os.getenv("GOOGLE_TYPE"),
+    "project_id": os.getenv("GOOGLE_PROJECT_ID"),
+    "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
+    "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace('\\n', '\n'),
+    "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
+    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+    "auth_uri": os.getenv("GOOGLE_AUTH_URI"),
+    "token_uri": os.getenv("GOOGLE_TOKEN_URI"),
+    "auth_provider_x509_cert_url": os.getenv("GOOGLE_AUTH_PROVIDER_X509_CERT_URL"),
+    "client_x509_cert_url": os.getenv("GOOGLE_CLIENT_X509_CERT_URL"),
+    "universe_domain": os.getenv("GOOGLE_UNIVERSE_DOMAIN")
 }
 creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
 gc = gspread.authorize(creds)
@@ -163,16 +162,16 @@ def get_fortune(message):
     try:
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
         return response.choices[0].message.content.strip()
-    except Exception as e:
+    except Exception:
         return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
 
 # === OCR ตรวจสลิป ===
 def extract_payment_info(text):
-    name = re.search(r'(ชื่อ[^\n\r]+)', text)
-    amount = re.search(r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?', text)
+    name = re.search(r"(ชื่อ[^\n\r]+)", text)
+    amount = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?", text)
     return {
-        'amount': amount.group(1).replace(',', '') if amount else None,
-        'name': name.group(1).strip() if name else None
+        "amount": amount.group(1).replace(",", "") if amount else None,
+        "name": name.group(1).strip() if name else None
     }
 
 # === ROUTES ===
@@ -222,7 +221,7 @@ def upload_slip():
         file.save(path)
         ocr_text = pytesseract.image_to_string(Image.open(path), lang="eng+tha")
         info = extract_payment_info(ocr_text)
-        amount_paid = int(float(info['amount'])) if info['amount'] else 0
+        amount_paid = int(float(info["amount"])) if info["amount"] else 0
         add_or_update_user(user_id, user_name, amount_paid, filename)
         push_line_message(user_id, f"📥 ได้รับสลิปแล้ว เพิ่มสิทธิ์ {amount_paid} ครั้งเรียบร้อย ✅")
         log_usage(user_id, "แนบสลิป", f"OCR: {info}")
@@ -244,6 +243,6 @@ def admin_dashboard():
     records = users_sheet.get_all_records()
     return render_template("admin_dashboard.html", users=records)
 
-# === EXPORT APP ===
+# === EXPORT ===
 application = app
 
