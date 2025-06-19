@@ -39,7 +39,7 @@ def get_ngrok_public_url():
         print("❌ ไม่สามารถดึง ngrok URL ได้:", e)
         return "http://localhost:5000"
 
-public_url = get_ngrok_public_url()
+public_url = os.getenv("PUBLIC_URL", "http://localhost:5000")
 print("Public URL:", public_url)
 
 # === Messaging ===
@@ -301,6 +301,8 @@ def success_page():
     return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
 
 
