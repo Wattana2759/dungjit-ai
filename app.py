@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from db_setup import User, Log
 import re
 
+# === Load ENV ===
 load_dotenv()
 app = Flask(__name__)
 
@@ -23,26 +24,17 @@ engine = create_engine('sqlite:///db.sqlite')
 Session = sessionmaker(bind=engine)
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
+public_url = os.getenv("PUBLIC_URL", "http://localhost:5000")
 
+print("🌐 Public URL:", public_url)
+
+# === Auth ===
 def require_basic_auth():
     auth = request.authorization
     if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
         return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
 
-def get_ngrok_public_url():
-    try:
-        tunnels = requests.get("http://127.0.0.1:4040/api/tunnels").json()
-        for tunnel in tunnels['tunnels']:
-            if tunnel['proto'] == 'https':
-                return tunnel['public_url']
-    except Exception as e:
-        print("❌ ไม่สามารถดึง ngrok URL ได้:", e)
-        return "http://localhost:5000"
-
-public_url = os.getenv("PUBLIC_URL", "http://localhost:5000")
-print("Public URL:", public_url)
-
-# === Messaging ===
+# === LINE Messaging ===
 def send_line_message(reply_token, text):
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
     body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
@@ -77,13 +69,14 @@ def send_payment_request(user_id):
             }
         }
     }
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_qr]})
+    requests.post("https://api.line.me/v2/bot/message/push", headers={
+        "Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
+    }, json={"to": user_id, "messages": [flex_qr]})
 
 def send_flex_upload_link(user_id):
     flex_message = {
         "type": "flex",
-        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน ดวงจิต AI คำถามละ 1 บาท เท่านั้น!",
+        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน ดวงจิต AI",
         "contents": {
             "type": "bubble",
             "hero": {
@@ -97,13 +90,7 @@ def send_flex_upload_link(user_id):
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    {
-                        "type": "text",
-                        "text": "แนบสลิปเพื่อรับสิทธิ์ใช้งานดวงจิต หมอดู AI",
-                        "weight": "bold",
-                        "size": "md",
-                        "wrap": True
-                    }
+                    {"type": "text", "text": "แนบสลิปเพื่อรับสิทธิ์ใช้งานดวงจิต หมอดู AI", "weight": "bold", "size": "md", "wrap": True}
                 ]
             },
             "footer": {
@@ -125,10 +112,11 @@ def send_flex_upload_link(user_id):
             }
         }
     }
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
+    requests.post("https://api.line.me/v2/bot/message/push", headers={
+        "Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
+    }, json={"to": user_id, "messages": [flex_message]})
 
-# === Fortune ===
+# === AI Core ===
 def get_fortune(message):
     prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน
 
@@ -141,7 +129,7 @@ def get_fortune(message):
         print("❌ OpenAI Error:", e)
         return "ขออภัย ระบบหมอดู AI ไม่สามารถให้คำตอบได้ในขณะนี้ กำลังปรับปรุงระบบ"
 
-# === OCR จากสลิป ===
+# === OCR ===
 def extract_payment_info(text):
     name = re.search(r'(ชื่อ[^\n\r]+)', text)
     amount = re.search(r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?', text)
@@ -150,7 +138,7 @@ def extract_payment_info(text):
         'name': name.group(1).strip() if name else None
     }
 
-# === Log การใช้งาน ===
+# === Logging ===
 def log_usage(line_id, action, detail):
     try:
         session = Session()
@@ -193,7 +181,7 @@ def webhook():
                     send_line_message(reply_token, f"คุณใช้ไปแล้ว {user.usage or 0} ครั้ง / {user.paid_quota or 0} ครั้ง")
                 continue
 
-            if not user or user.paid_quota is None or user.paid_quota <= 0:
+            if not user or user.paid_quota <= 0:
                 push_line_message(user_id, "💸 กรุณาชำระเงิน (1 บาท = 1 คำถาม)")
                 send_payment_request(user_id)
                 send_flex_upload_link(user_id)
@@ -211,7 +199,7 @@ def webhook():
 
     return jsonify(status="ok")
 
-# === Upload Slip ===
+# === Upload ===
 @app.route("/upload-slip", methods=["GET", "POST"])
 def upload_slip():
     if request.method == "POST":
@@ -253,7 +241,7 @@ def upload_slip():
 def upload_slip_liff():
     return render_template("upload_slip_liff.html", liff_id=LIFF_ID)
 
-# === Admin Dashboard ===
+# === Admin ===
 @app.route("/admin")
 def admin_dashboard():
     auth = require_basic_auth()
@@ -300,9 +288,8 @@ def review_slip_action():
 def success_page():
     return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
 
+# === Dynamic Port for Render ===
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
-
 
