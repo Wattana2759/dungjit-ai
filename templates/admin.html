@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>แอดมิน - ดวงจิต AI</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f9f9f9;
+      padding: 20px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: #fff;
+      margin-bottom: 30px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background: #efefef;
+    }
+    ul {
+      background: #fff;
+      padding: 15px;
+      border: 1px solid #ccc;
+      list-style: none;
+    }
+    ul li {
+      margin-bottom: 5px;
+    }
+    a {
+      display: inline-block;
+      margin-top: 20px;
+      color: #007bff;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>📋 รายชื่อผู้ใช้</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>user_id</th>
+        <th>ชื่อ</th>
+        <th>ใช้งาน</th>
+        <th>สิทธิ์</th>
+        <th>อัปโหลดล่าสุด</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td>{{ user.id }}</td>
+        <td>{{ user.name or '-' }}</td>
+        <td>{{ user.usage }}</td>
+        <td>{{ user.paid_quota }}</td>
+        <td>{{ user.last_uploaded }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>📜 Logs ล่าสุด</h2>
+  <ul>
+    {% for log in logs %}
+      <li>{{ log.timestamp }} | {{ log.line_id }} | {{ log.action }} | {{ log.detail }}</li>
+    {% endfor %}
+  </ul>
+
+  <a href="/">← กลับหน้าหลัก</a>
+</body>
+</html>
+
