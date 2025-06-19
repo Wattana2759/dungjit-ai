@@ -1,0 +1,22 @@
+<h1>🖼️ ตรวจสอบสลิป</h1>
+
+{% for user in users %}
+  <div style="margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+    <strong>{{ user.name or user.id }}</strong><br>
+    <img src="/static/slips/{{ user.slip_file }}" width="300"><br>
+    อัปโหลดเมื่อ: {{ user.last_uploaded }}<br><br>
+
+    <form method="POST" action="/review-slip-action" style="display:inline;">
+      <input type="hidden" name="user_id" value="{{ user.id }}">
+      <input type="hidden" name="action" value="approve">
+      <button type="submit" style="background-color:green;color:white;padding:5px 10px;">✅ อนุมัติ</button>
+    </form>
+
+    <form method="POST" action="/review-slip-action" style="display:inline;">
+      <input type="hidden" name="user_id" value="{{ user.id }}">
+      <input type="hidden" name="action" value="reject">
+      <button type="submit" style="background-color:red;color:white;padding:5px 10px;">❌ ปฏิเสธ</button>
+    </form>
+  </div>
+{% endfor %}
+

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: duangjit-ai
+    env: python
+    buildCommand: ""
+    startCommand: python app.py
+    envVars:
+      - key: LINE_ACCESS_TOKEN
+        value: <ใส่ token ของคุณ>
+      - key: OPENAI_API_KEY
+        value: <ใส่ OpenAI API Key>
+      - key: LIFF_ID
+        value: <ใส่ LIFF ID ของคุณ>

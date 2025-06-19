@@ -1,0 +1,14 @@
+flask
+openai
+gspread
+oauth2client
+requests
+pytesseract
+pillow
+sqlalchemy
+python-dotenv
+
+pytesseract
+pillow
+sqlalchemy
+python-dotenv
