@@ -2,12 +2,18 @@ services:
   - type: web
     name: duangjit-ai
     env: python
-    buildCommand: ""
+    plan: free
+    buildCommand: pip install -r requirements.txt
     startCommand: python app.py
     envVars:
       - key: LINE_ACCESS_TOKEN
-        value: <ใส่ token ของคุณ>
+        sync: false
       - key: OPENAI_API_KEY
-        value: <ใส่ OpenAI API Key>
+        sync: false
       - key: LIFF_ID
-        value: <ใส่ LIFF ID ของคุณ>
+        sync: false
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASS
+        value: 1234
+
