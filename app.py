@@ -33,7 +33,7 @@ service_account_info = {
     "type": os.getenv("GOOGLE_TYPE"),
     "project_id": os.getenv("GOOGLE_PROJECT_ID"),
     "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
-    "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace('\n', '\n').replace('\\n', '\n'),
+    "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace('\\n', '\n'),
     "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
     "client_id": os.getenv("GOOGLE_CLIENT_ID"),
     "auth_uri": os.getenv("GOOGLE_AUTH_URI"),
@@ -157,7 +157,7 @@ def send_flex_upload_link(user_id):
 
 # === AI ฟีเจอร์ ===
 def get_fortune(message):
-    prompt = f"คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: \"{message}\"\nคำตอบของหมอดู:"
+    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -167,5 +167,92 @@ def get_fortune(message):
     except Exception:
         return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
 
+# === OCR ตรวจสลิป ===
+def extract_payment_info(text):
+    name = re.search(r"(ชื่อ[^\n\r]+)", text)
+    amount = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?", text)
+    return {
+        "amount": amount.group(1).replace(",", "") if amount else None,
+        "name": name.group(1).strip() if name else None
+    }
+
+# === ROUTES ===
+@app.route("/")
+def home():
+    return "ดวงจิต AI พร้อมใช้งานแล้ว"
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.json
+    for event in data.get("events", []):
+        reply_token = event["replyToken"]
+        user_id = event["source"]["userId"]
+        message_text = event.get("message", {}).get("text", "")
+
+        user, _ = get_user(user_id)
+        if message_text.strip().lower() == "/ดูสิทธิ์":
+            if not user:
+                send_line_message(reply_token, "คุณยังไม่มีสิทธิ์ใช้งาน")
+            else:
+                send_line_message(reply_token, f"คุณใช้ไปแล้ว {user['usage']} / {user['paid_quota']} ครั้ง")
+            continue
+
+        if not user or int(user["paid_quota"]) <= int(user["usage"]):
+            send_payment_request(user_id)
+            send_flex_upload_link(user_id)
+            continue
+
+        reply = get_fortune(message_text)
+        send_line_message(reply_token, reply)
+        update_user(user_id, usage=int(user["usage"]) + 1)
+        log_usage(user_id, "ใช้สิทธิ์", message_text)
+
+    return jsonify({"status": "ok"})
+
+@app.route("/upload-slip", methods=["GET", "POST"])
+def upload_slip():
+    if request.method == "POST":
+        user_id = request.form.get("user_id")
+        user_name = request.form.get("user_name")
+        file = request.files.get("file")
+        if not user_id or not file:
+            return "กรุณากรอกข้อมูลให้ครบ", 400
+        filename = f"slip_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+        os.makedirs("static/slips", exist_ok=True)
+        path = f"static/slips/{filename}"
+        file.save(path)
+        ocr_text = pytesseract.image_to_string(Image.open(path), lang="eng+tha")
+        info = extract_payment_info(ocr_text)
+        amount_paid = int(float(info["amount"])) if info["amount"] else 0
+        add_or_update_user(user_id, user_name, amount_paid, filename)
+        push_line_message(user_id, f"📥 ได้รับสลิปแล้ว เพิ่มสิทธิ์ {amount_paid} ครั้งเรียบร้อย ✅")
+        log_usage(user_id, "แนบสลิป", f"OCR: {info}")
+        return render_template("success.html", user_id=user_id)
+    return render_template("upload_form.html")
+
+@app.route("/upload-slip-liff")
+def upload_slip_liff():
+    return render_template("upload_slip_liff.html", liff_id=LIFF_ID)
+
+@app.route("/success")
+def success_page():
+    return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
+
+@app.route("/admin")
+def admin_dashboard():
+    auth = require_basic_auth()
+    if auth: return auth
+    records = users_sheet.get_all_records()
+    return render_template("admin_dashboard.html", users=records)
+
+@app.route("/test-sheet")
+def test_sheet():
+    try:
+        data = users_sheet.get_all_records()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
 # === EXPORT ===
 application = app
+
