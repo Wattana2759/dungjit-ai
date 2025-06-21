@@ -184,7 +184,6 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
-    print("🛜 Webhook Received:", data)  # ✅ DEBUG print log
     for event in data.get("events", []):
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
@@ -245,6 +244,15 @@ def admin_dashboard():
     if auth: return auth
     records = users_sheet.get_all_records()
     return render_template("admin_dashboard.html", users=records)
+
+# ✅ === NEW TEST ROUTE ===
+@app.route("/test-sheet")
+def test_sheet():
+    try:
+        data = users_sheet.get_all_records()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
 # === EXPORT ===
 application = app
