@@ -184,6 +184,7 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
+    print("🛜 Webhook Received:", data)  # ✅ DEBUG print log
     for event in data.get("events", []):
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
