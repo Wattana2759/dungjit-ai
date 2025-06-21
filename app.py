@@ -159,7 +159,10 @@ def send_flex_upload_link(user_id):
 def get_fortune(message):
     prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
     try:
-        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}]
+        )
         return response.choices[0].message.content.strip()
     except Exception:
         return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
