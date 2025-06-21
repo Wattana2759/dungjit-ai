@@ -178,10 +178,6 @@ def extract_payment_info(text):
 def home():
     return "ดวงจิต AI พร้อมใช้งานแล้ว"
 
-@app.route("/webhook", methods=["GET"])
-def webhook_verify():
-    return "OK", 200
-
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
