@@ -24,7 +24,7 @@ LIFF_ID = os.getenv("LIFF_ID")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
-GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/app/duangjit-ai-808449ecaf0c.json")
+GOOGLE_CREDENTIALS_PATH = os.path.join(os.path.dirname(__file__), "duangjit-ai-808449ecaf0c.json")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
