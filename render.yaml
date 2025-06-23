@@ -5,6 +5,10 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     envVars:
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /app/duangjit-sa.json
+        type: secretFile
+
       - key: LINE_ACCESS_TOKEN
         sync: false
       - key: OPENAI_API_KEY
@@ -22,26 +26,5 @@ services:
       - key: ADMIN_USER
         value: admin
       - key: ADMIN_PASS
-        value: 1234
-      # Google service account keys
-      - key: GOOGLE_TYPE
-        sync: false
-      - key: GOOGLE_PROJECT_ID
-        sync: false
-      - key: GOOGLE_PRIVATE_KEY_ID
-        sync: false
-      - key: GOOGLE_PRIVATE_KEY
-        sync: false
-      - key: GOOGLE_CLIENT_EMAIL
-        sync: false
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_AUTH_URI
-        sync: false
-      - key: GOOGLE_TOKEN_URI
-        sync: false
-      - key: GOOGLE_AUTH_PROVIDER_X509_CERT_URL
-        sync: false
-      - key: GOOGLE_CLIENT_X509_CERT_URL
-        sync: false
+        value: Wattana@2759
 
