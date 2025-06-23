@@ -29,19 +29,8 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 # === GOOGLE SHEETS ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-service_account_info = {
-    "type": os.getenv("GOOGLE_TYPE"),
-    "project_id": os.getenv("GOOGLE_PROJECT_ID"),
-    "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
-    "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace('\\n', '\n'),
-    "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
-    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-    "auth_uri": os.getenv("GOOGLE_AUTH_URI"),
-    "token_uri": os.getenv("GOOGLE_TOKEN_URI"),
-    "auth_provider_x509_cert_url": os.getenv("GOOGLE_AUTH_PROVIDER_X509_CERT_URL"),
-    "client_x509_cert_url": os.getenv("GOOGLE_CLIENT_X509_CERT_URL"),
-}
-creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
+GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+creds = Credentials.from_service_account_file(GOOGLE_CREDENTIALS_PATH, scopes=SCOPES)
 gc = gspread.authorize(creds)
 users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
 logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
