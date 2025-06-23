@@ -156,7 +156,8 @@ def get_fortune(message):
             messages=[{"role": "user", "content": prompt}]
         )
         return response.choices[0].message.content.strip()
-    except Exception:
+    except Exception as e:
+        print("❌ GPT ERROR:", e)
         return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
 
 # === OCR ตรวจสลิป ===
