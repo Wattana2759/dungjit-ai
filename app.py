@@ -21,7 +21,7 @@ GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
 LIFF_ID = os.getenv("LIFF_ID")
-PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
+PUBLIC_URL = os.getenv("PUBLIC_URL", "https://dungjit-ai-3.onrender.com")  # ✅ แก้ให้ถูกต้อง
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 

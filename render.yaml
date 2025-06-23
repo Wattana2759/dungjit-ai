@@ -1,21 +1,46 @@
 services:
   - type: web
-    name: duangjit-ai
-    env: python
-    plan: free
+    name: dungjit-ai
+    runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    startCommand: gunicorn app:application
     envVars:
       - key: LINE_ACCESS_TOKEN
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: LIFF_ID
+      - key: GOOGLE_SHEET_ID
         sync: false
+      - key: SHEET_NAME_USERS
+        value: Users
+      - key: SHEET_NAME_LOGS
+        value: Logs
+      - key: PUBLIC_URL
+        value: https://dungjit-ai-3.onrender.com
+      - key: LIFF_ID
+        value: 2007541798-GneVaZEy
       - key: ADMIN_USER
         value: admin
       - key: ADMIN_PASS
         value: 1234
-      - key: PUBLIC_URL
-        value: https://duangjit-ai.onrender.com
+      - key: GOOGLE_TYPE
+        sync: false
+      - key: GOOGLE_PROJECT_ID
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY_ID
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_AUTH_URI
+        sync: false
+      - key: GOOGLE_TOKEN_URI
+        sync: false
+      - key: GOOGLE_AUTH_PROVIDER_X509_CERT_URL
+        sync: false
+      - key: GOOGLE_CLIENT_X509_CERT_URL
+        sync: false
 
