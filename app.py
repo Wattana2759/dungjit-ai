@@ -232,7 +232,7 @@ def upload_slip():
 
 @app.route("/upload-slip-liff")
 def upload_slip_liff():
-    return render_template("upload_slip_liff.html", liff_id=LIFF_ID)
+    return render_template("upload_slip_liff.html", liff_id=os.getenv("LIFF_ID"))
 
 @app.route("/success")
 def success_page():
