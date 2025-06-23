@@ -1,9 +1,9 @@
 services:
   - type: web
     name: dungjit-ai
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:application
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
     envVars:
       - key: LINE_ACCESS_TOKEN
         sync: false
@@ -23,6 +23,7 @@ services:
         value: admin
       - key: ADMIN_PASS
         value: 1234
+      # Google service account keys
       - key: GOOGLE_TYPE
         sync: false
       - key: GOOGLE_PROJECT_ID
