@@ -61,8 +61,8 @@ def add_or_update_user(user_id, name, added_quota, slip_file):
     user, row = get_user(user_id)
     now = datetime.now().isoformat()
     if user:
-        new_quota = user["paid_quota"] + added_quota
-        users_sheet.update(f"C{row}:F{row}", [[user["usage"], new_quota, slip_file, now]])
+        new_quota = int(user.get("paid_quota", 0)) + added_quota
+        users_sheet.update(f"C{row}:F{row}", [[user.get("usage", 0), new_quota, slip_file, now]])
     else:
         users_sheet.append_row([user_id, name, 0, added_quota, slip_file, now])
 
@@ -187,17 +187,20 @@ def webhook():
             if not user:
                 send_line_message(reply_token, "คุณยังไม่มีสิทธิ์ใช้งาน")
             else:
-                send_line_message(reply_token, f"คุณใช้ไปแล้ว {user['usage']} / {user['paid_quota']} ครั้ง")
+                send_line_message(reply_token, f"คุณใช้ไปแล้ว {user.get('usage', 0)} / {user.get('paid_quota', 0)} ครั้ง")
             continue
 
-        if not user or int(user["paid_quota"]) <= int(user["usage"]):
+        paid = int(user.get("paid_quota", 0)) if user else 0
+        used = int(user.get("usage", 0)) if user else 0
+
+        if not user or used >= paid:
             send_payment_request(user_id)
             send_flex_upload_link(user_id)
             continue
 
         reply = get_fortune(message_text)
         send_line_message(reply_token, reply)
-        update_user(user_id, usage=int(user["usage"]) + 1)
+        update_user(user_id, usage=used + 1)
         log_usage(user_id, "ใช้สิทธิ์", message_text)
 
     return jsonify({"status": "ok"})
@@ -214,7 +217,11 @@ def upload_slip():
         os.makedirs("static/slips", exist_ok=True)
         path = f"static/slips/{filename}"
         file.save(path)
-        ocr_text = pytesseract.image_to_string(Image.open(path), lang="eng+tha")
+        try:
+            ocr_text = pytesseract.image_to_string(Image.open(path), lang="eng+tha")
+        except Exception as e:
+            print("❌ OCR ERROR:", e)
+            return "เกิดข้อผิดพลาดในการอ่านสลิป", 500
         info = extract_payment_info(ocr_text)
         amount_paid = int(float(info["amount"])) if info["amount"] else 0
         add_or_update_user(user_id, user_name, amount_paid, filename)

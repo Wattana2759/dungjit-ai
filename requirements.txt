@@ -2,11 +2,10 @@ Flask==3.0.3
 gunicorn==21.2.0
 python-dotenv==1.0.1
 requests==2.32.3
-pillow==10.3.0
+pillow==10.2.0
 pytesseract==0.3.10
 gspread==5.12.2
 openai==1.30.3
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
-oauth2client==4.1.3
