@@ -126,7 +126,7 @@
 
     async function init() {
       try {
-        await liff.init({ liffId: "{{ liff_id }}" });  // ดึงจาก Flask render
+        await liff.init({ liffId: "2007541798-GneVaZEy" });  // <<=== ฝัง LIFF ID ตรงนี้
         if (!liff.isLoggedIn()) {
           liff.login();
         } else {
