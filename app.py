@@ -21,7 +21,7 @@ GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
 LIFF_ID = os.getenv("LIFF_ID")
-PUBLIC_URL = os.getenv("PUBLIC_URL", "https://dungjit-ai-3.onrender.com")
+PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
@@ -100,7 +100,7 @@ def send_payment_request(user_id):
             "type": "bubble",
             "hero": {
                 "type": "image",
-                "url": f"{PUBLIC_URL}/static/qr_promptpay.png",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647509/qr_promptpay_rzompe.jpg",
                 "size": "full",
                 "aspectRatio": "1:1",
                 "aspectMode": "cover"
@@ -122,12 +122,12 @@ def send_payment_request(user_id):
 def send_flex_upload_link(user_id):
     flex_message = {
         "type": "flex",
-        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน ดวงจิต AI",
+        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ดูดวง AI",
         "contents": {
             "type": "bubble",
             "hero": {
                 "type": "image",
-                "url": f"{PUBLIC_URL}/static/banner.jpg",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
                 "size": "full",
                 "aspectRatio": "16:9",
                 "aspectMode": "cover"
@@ -135,7 +135,10 @@ def send_flex_upload_link(user_id):
             "body": {
                 "type": "box",
                 "layout": "vertical",
-                "contents": [{"type": "text", "text": "แนบสลิปเพื่อรับสิทธิ์", "weight": "bold", "size": "md"}]
+                "contents": [
+                    {"type": "text", "text": "แนบสลิปเพื่อเปิดสิทธิ์ดูดวง AI", "weight": "bold", "size": "md"},
+                    {"type": "text", "text": "สมัครใช้งานดวงจิต AI ขั้นตอนสุดท้าย", "size": "sm", "wrap": True}
+                ]
             },
             "footer": {
                 "type": "box",
