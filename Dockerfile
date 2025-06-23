@@ -13,7 +13,7 @@ WORKDIR /app
 COPY . .
 
 # ตั้งค่าตำแหน่ง service account json
-ENV GOOGLE_APPLICATION_CREDENTIALS="/app/duangjit-sa.json"
+ENV GOOGLE_APPLICATION_CREDENTIALS="/app/duangjit-ai-808449ecaf0c.json"
 
 # ติดตั้ง Python packages
 RUN pip install --no-cache-dir -r requirements.txt

@@ -9,18 +9,21 @@ services:
         value: /app/duangjit-ai-808449ecaf0c.json
         type: secretFile
 
+      # Secret variables ที่ตั้งจาก Dashboard หรือ Render CLI (sync: false)
       - key: LINE_ACCESS_TOKEN
         sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: GOOGLE_SHEET_ID
         sync: false
+
+      # ค่าอื่น ๆ ที่สามารถ sync ได้
       - key: SHEET_NAME_USERS
         value: Users
       - key: SHEET_NAME_LOGS
         value: Logs
       - key: PUBLIC_URL
-        value: https://dungjit-ai-3.onrender.com
+        value: https://dungjit-ai.onrender.com
       - key: LIFF_ID
         value: 2007541798-GneVaZEy
       - key: ADMIN_USER
