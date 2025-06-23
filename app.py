@@ -21,7 +21,7 @@ GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
 LIFF_ID = os.getenv("LIFF_ID")
-PUBLIC_URL = os.getenv("PUBLIC_URL", "https://dungjit-ai-3.onrender.com")  # ✅ แก้ให้ถูกต้อง
+PUBLIC_URL = os.getenv("PUBLIC_URL", "https://dungjit-ai-3.onrender.com")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
@@ -100,7 +100,7 @@ def send_payment_request(user_id):
             "type": "bubble",
             "hero": {
                 "type": "image",
-                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647509/qr_promptpay_rzompe.jpg",
+                "url": f"{PUBLIC_URL}/static/qr_promptpay.png",
                 "size": "full",
                 "aspectRatio": "1:1",
                 "aspectMode": "cover"
@@ -127,7 +127,7 @@ def send_flex_upload_link(user_id):
             "type": "bubble",
             "hero": {
                 "type": "image",
-                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
+                "url": f"{PUBLIC_URL}/static/banner.jpg",
                 "size": "full",
                 "aspectRatio": "16:9",
                 "aspectMode": "cover"

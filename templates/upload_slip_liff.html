@@ -37,6 +37,7 @@
       padding: 20px;
       color: var(--fg);
     }
+
     .container {
       max-width: 420px;
       background: var(--card);
@@ -46,14 +47,17 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       text-align: center;
     }
+
     h2 {
       margin-top: 0;
     }
+
     label {
       display: block;
       margin: 16px 0 8px;
       font-weight: bold;
     }
+
     input[type="file"], button {
       width: 100%;
       padding: 12px;
@@ -61,6 +65,7 @@
       border-radius: 8px;
       box-sizing: border-box;
     }
+
     button {
       background-color: var(--btn);
       color: white;
@@ -68,9 +73,11 @@
       margin-top: 16px;
       cursor: pointer;
     }
+
     button:hover {
       background-color: var(--btn-hover);
     }
+
     .back-btn {
       margin-top: 20px;
       display: inline-block;
@@ -80,9 +87,11 @@
       text-decoration: none;
       border-radius: 8px;
     }
+
     .back-btn:hover {
       background-color: var(--back-btn-hover);
     }
+
     #preview {
       margin-top: 16px;
       max-width: 100%;
@@ -90,6 +99,7 @@
       border: 1px solid var(--border);
       display: none;
     }
+
     #status {
       margin-top: 10px;
       font-size: 0.9em;
@@ -99,7 +109,7 @@
 <body>
   <div class="container">
     <h2>แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน</h2>
-    <form id="slipForm" action="/upload-slip" method="POST" enctype="multipart/form-data">
+    <form id="slipForm" action="https://dungjit-ai-3.onrender.com/upload-slip" method="POST" enctype="multipart/form-data">
       <input type="hidden" name="user_id" id="user_id">
       <input type="hidden" name="user_name" id="user_name">
       <label for="file">เลือกไฟล์สลิป</label>
@@ -116,7 +126,7 @@
 
     async function init() {
       try {
-        await liff.init({ liffId: "2007541798-GneVaZEy" });
+        await liff.init({ liffId: "{{ liff_id }}" });  // ดึงจาก Flask render
         if (!liff.isLoggedIn()) {
           liff.login();
         } else {
@@ -130,7 +140,7 @@
       }
     }
 
-    // Preview ภาพ
+    // แสดงภาพ preview
     document.getElementById("file").addEventListener("change", function () {
       const file = this.files[0];
       const preview = document.getElementById("preview");
@@ -146,7 +156,6 @@
       }
     });
 
-    // ตรวจสอบไฟล์ก่อน submit
     document.getElementById("slipForm").addEventListener("submit", function (e) {
       const fileInput = document.getElementById("file");
       const file = fileInput.files[0];
