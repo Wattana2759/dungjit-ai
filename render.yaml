@@ -6,7 +6,7 @@ services:
     plan: free
     envVars:
       - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: /app/duangjit-sa.json
+        value: /app/duangjit-ai-808449ecaf0c.json
         type: secretFile
 
       - key: LINE_ACCESS_TOKEN
