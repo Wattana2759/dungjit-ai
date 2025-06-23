@@ -24,235 +24,158 @@ LIFF_ID = os.getenv("LIFF_ID")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
-GOOGLE_CREDENTIALS_PATH = "/app/duangjit-ai-808449ecaf0c.json"
-
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # === GOOGLE SHEETS ===
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-creds = Credentials.from_service_account_file(GOOGLE_CREDENTIALS_PATH, scopes=SCOPES)
-gc = gspread.authorize(creds)
-users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
-logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
+scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+credentials = Credentials.from_service_account_file(
+    os.getenv("GOOGLE_APPLICATION_CREDENTIALS"), scopes=scopes
+)
+gc = gspread.authorize(credentials)
+sheet_users = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
+sheet_logs = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 
-# === BASIC AUTH ===
-def require_basic_auth():
-    auth = request.authorization
-    if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
-        return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
-
-# === USER FUNCTIONS ===
-def get_user(user_id):
-    records = users_sheet.get_all_records()
-    for i, row in enumerate(records):
-        if row["user_id"] == user_id:
-            return row, i + 2
-    return None, None
-
-def update_user(user_id, usage=None, quota=None):
-    _, row = get_user(user_id)
-    if row:
-        if usage is not None:
-            users_sheet.update_cell(row, 3, usage)
-        if quota is not None:
-            users_sheet.update_cell(row, 4, quota)
-
-def add_or_update_user(user_id, name, added_quota, slip_file):
-    user, row = get_user(user_id)
-    now = datetime.now().isoformat()
-    if user:
-        new_quota = int(user.get("paid_quota", 0)) + added_quota
-        users_sheet.update(f"C{row}:F{row}", [[user.get("usage", 0), new_quota, slip_file, now]])
-    else:
-        users_sheet.append_row([user_id, name, 0, added_quota, slip_file, now])
-
-def log_usage(user_id, action, detail):
-    now = datetime.now().isoformat()
-    logs_sheet.append_row([now, user_id, action, detail])
-
-# === LINE FUNCTIONS ===
-def send_line_message(reply_token, text):
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
-def push_line_message(user_id, text):
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
-
-def send_payment_request(user_id):
-    flex_qr = {
-        "type": "flex",
-        "altText": "กรุณาชำระเงินก่อนแนบสลิป",
-        "contents": {
-            "type": "bubble",
-            "hero": {
-                "type": "image",
-                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647509/qr_promptpay_rzompe.jpg",
-                "size": "full",
-                "aspectRatio": "1:1",
-                "aspectMode": "cover"
-            },
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {"type": "text", "text": "📌 สแกนจ่ายผ่าน PromptPay", "weight": "bold", "size": "md"},
-                    {"type": "text", "text": "บัญชี: นาย วัฒนา จันดาหาร", "size": "sm", "wrap": True},
-                    {"type": "text", "text": "คำถามละ 1 บาท — แนบสลิปภายหลัง", "size": "sm", "wrap": True}
-                ]
-            }
-        }
+# === LINE API ===
+def reply_text(reply_token, text):
+    headers = {
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
     }
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_qr]})
-
-def send_flex_upload_link(user_id):
-    flex_message = {
-        "type": "flex",
-        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ดูดวง AI",
-        "contents": {
-            "type": "bubble",
-            "hero": {
-                "type": "image",
-                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
-                "size": "full",
-                "aspectRatio": "16:9",
-                "aspectMode": "cover"
-            },
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {"type": "text", "text": "แนบสลิปเพื่อเปิดสิทธิ์ดูดวง AI", "weight": "bold", "size": "md"},
-                    {"type": "text", "text": "สมัครใช้งานดวงจิต AI ขั้นตอนสุดท้าย", "size": "sm", "wrap": True}
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [{
-                    "type": "button",
-                    "style": "primary",
-                    "action": {
-                        "type": "uri",
-                        "label": "แนบสลิปตอนนี้",
-                        "uri": f"{PUBLIC_URL}/upload-slip-liff"
-                    }
-                }]
-            }
-        }
+    data = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": text}]
     }
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=data)
 
-# === AI ฟีเจอร์ ===
-def get_fortune(message):
-    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print("❌ GPT ERROR:", e)
-        return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
-
-# === OCR ตรวจสลิป ===
-def extract_payment_info(text):
-    name = re.search(r"(ชื่อ[^\n\r]+)", text)
-    amount = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?", text)
-    return {
-        "amount": amount.group(1).replace(",", "") if amount else None,
-        "name": name.group(1).strip() if name else None
+def push_flex_message(user_id, alt_text, contents):
+    headers = {
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
     }
+    data = {
+        "to": user_id,
+        "messages": [{
+            "type": "flex",
+            "altText": alt_text,
+            "contents": contents
+        }]
+    }
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=data)
+
+# === OCR ===
+def extract_amount_and_name(image_path):
+    image = Image.open(image_path)
+    text = pytesseract.image_to_string(image, lang="tha+eng")
+    amount_match = re.search(r'([0-9,]+\.\d{2})\s*บาท', text)
+    name_match = re.search(r'(นาย|นางสาว|นาง|คุณ)\s?[^\s\n]+', text)
+    amount = amount_match.group(1).replace(",", "") if amount_match else None
+    name = name_match.group(0) if name_match else None
+    return amount, name, text
 
 # === ROUTES ===
 @app.route("/")
 def home():
-    return "ดวงจิต AI พร้อมใช้งานแล้ว"
+    return "ดวงจิต AI พร้อมทำงาน"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.json
-    for event in data.get("events", []):
-        reply_token = event["replyToken"]
-        user_id = event["source"]["userId"]
-        message_text = event.get("message", {}).get("text", "")
+    payload = request.json
+    try:
+        for event in payload["events"]:
+            reply_token = event["replyToken"]
+            user_id = event["source"]["userId"]
+            if event["type"] == "message" and event["message"]["type"] == "text":
+                text = event["message"]["text"]
+                # ตรวจสอบสิทธิ์ใช้งาน
+                usage = sheet_users.find(user_id)
+                if usage:
+                    row = usage.row
+                    quota = int(sheet_users.cell(row, 3).value)
+                    if quota > 0:
+                        response = call_openai(text)
+                        reply_text(reply_token, response)
+                        sheet_users.update_cell(row, 3, quota - 1)
+                        sheet_logs.append_row([datetime.now().isoformat(), user_id, text])
+                    else:
+                        reply_text(reply_token, "❌ คุณใช้สิทธิ์ครบแล้ว กรุณาเติมเงินหรือแนบสลิปการโอน")
+                else:
+                    # สมัครใหม่
+                    sheet_users.append_row([user_id, datetime.now().isoformat(), 0])
+                    reply_text(reply_token, "👋 ยินดีต้อนรับสู่ดวงจิต AI\nกรุณาเติมเงินและแนบสลิปเพื่อเริ่มใช้งาน")
 
-        user, _ = get_user(user_id)
-        if message_text.strip().lower() == "/ดูสิทธิ์":
-            if not user:
-                send_line_message(reply_token, "คุณยังไม่มีสิทธิ์ใช้งาน")
-            else:
-                send_line_message(reply_token, f"คุณใช้ไปแล้ว {user.get('usage', 0)} / {user.get('paid_quota', 0)} ครั้ง")
-            continue
+            elif event["type"] == "message" and event["message"]["type"] == "image":
+                image_id = event["message"]["id"]
+                image_data = requests.get(
+                    f"https://api-data.line.me/v2/bot/message/{image_id}/content",
+                    headers={"Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
+                ).content
+                image_path = f"static/{image_id}.jpg"
+                with open(image_path, "wb") as f:
+                    f.write(image_data)
+                amount, name, full_text = extract_amount_and_name(image_path)
+                if amount:
+                    # เพิ่ม quota ตามจำนวนเงิน
+                    usage = sheet_users.find(user_id)
+                    row = usage.row if usage else sheet_users.row_count + 1
+                    old_quota = int(sheet_users.cell(row, 3).value) if usage else 0
+                    new_quota = old_quota + int(float(amount))
+                    if usage:
+                        sheet_users.update_cell(row, 3, new_quota)
+                    else:
+                        sheet_users.append_row([user_id, datetime.now().isoformat(), new_quota])
+                    reply_text(reply_token, f"✅ ตรวจพบยอดเงิน {amount} บาท\nเพิ่มสิทธิ์ให้เรียบร้อยแล้ว ({new_quota} ครั้ง)")
+                else:
+                    reply_text(reply_token, "❌ ไม่สามารถตรวจสอบสลิปได้ กรุณาลองใหม่อีกครั้ง")
 
-        paid = int(user.get("paid_quota", 0)) if user else 0
-        used = int(user.get("usage", 0)) if user else 0
+    except Exception as e:
+        print("❌ ERROR:", e)
+        reply_text(reply_token, "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว")
+    return "OK"
 
-        if not user or used >= paid:
-            send_payment_request(user_id)
-            send_flex_upload_link(user_id)
-            continue
+# === OPENAI ===
+def call_openai(prompt):
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"ขออภัย ระบบขัดข้อง: {e}"
 
-        reply = get_fortune(message_text)
-        send_line_message(reply_token, reply)
-        update_user(user_id, usage=used + 1)
-        log_usage(user_id, "ใช้สิทธิ์", message_text)
-
-    return jsonify({"status": "ok"})
-
+# === LIFF / แนบสลิป ===
 @app.route("/upload-slip", methods=["GET", "POST"])
 def upload_slip():
     if request.method == "POST":
-        user_id = request.form.get("user_id")
-        user_name = request.form.get("user_name")
-        file = request.files.get("file")
-        if not user_id or not file:
-            return "กรุณากรอกข้อมูลให้ครบ", 400
-        filename = f"slip_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-        os.makedirs("static/slips", exist_ok=True)
-        path = f"static/slips/{filename}"
-        file.save(path)
-        try:
-            ocr_text = pytesseract.image_to_string(Image.open(path), lang="eng+tha")
-        except Exception as e:
-            print("❌ OCR ERROR:", e)
-            return "เกิดข้อผิดพลาดในการอ่านสลิป", 500
-        info = extract_payment_info(ocr_text)
-        amount_paid = int(float(info["amount"])) if info["amount"] else 0
-        add_or_update_user(user_id, user_name, amount_paid, filename)
-        push_line_message(user_id, f"📥 ได้รับสลิปแล้ว เพิ่มสิทธิ์ {amount_paid} ครั้งเรียบร้อย ✅")
-        log_usage(user_id, "แนบสลิป", f"OCR: {info}")
-        return render_template("success.html", user_id=user_id)
-    return render_template("upload_form.html")
+        file = request.files["slip"]
+        user_id = request.form["user_id"]
+        image_path = f"static/{user_id}_{datetime.now().timestamp()}.jpg"
+        file.save(image_path)
+        amount, name, text = extract_amount_and_name(image_path)
+        if amount:
+            usage = sheet_users.find(user_id)
+            row = usage.row if usage else sheet_users.row_count + 1
+            old_quota = int(sheet_users.cell(row, 3).value) if usage else 0
+            new_quota = old_quota + int(float(amount))
+            if usage:
+                sheet_users.update_cell(row, 3, new_quota)
+            else:
+                sheet_users.append_row([user_id, datetime.now().isoformat(), new_quota])
+            return f"✅ ระบบตรวจสอบสลิปแล้ว: {amount} บาท เพิ่มสิทธิ์เป็น {new_quota} ครั้ง"
+        else:
+            return "❌ ไม่พบยอดเงินในสลิป กรุณาแนบใหม่"
+    return render_template("upload_slip.html", liff_id=LIFF_ID)
 
-@app.route("/upload-slip-liff")
-def upload_slip_liff():
-    return render_template("upload_slip_liff.html", liff_id=LIFF_ID)
-
-@app.route("/success")
-def success_page():
-    return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
-
+# === BASIC ADMIN LOGIN ===
 @app.route("/admin")
-def admin_dashboard():
-    auth = require_basic_auth()
-    if auth: return auth
-    records = users_sheet.get_all_records()
-    return render_template("admin_dashboard.html", users=records)
+def admin():
+    auth = request.authorization
+    if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
+        return Response("Unauthorized", 401, {"WWW-Authenticate": "Basic realm='Login Required'"})
+    users = sheet_users.get_all_records()
+    return render_template("admin.html", users=users)
 
-@app.route("/test-sheet")
-def test_sheet():
-    try:
-        data = users_sheet.get_all_records()
-        return jsonify({"status": "success", "data": data})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
-# === EXPORT ===
-application = app
+# === MAIN ===
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000, debug=True)
 
