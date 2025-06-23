@@ -18,13 +18,13 @@ app = Flask(__name__)
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
-SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
-SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
+SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS", "Users")
+SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS", "Logs")
 LIFF_ID = os.getenv("LIFF_ID")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
-GOOGLE_CREDENTIALS_PATH = "/app/duangjit-ai-808449ecaf0c.json"
+GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/app/duangjit-ai-808449ecaf0c.json")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -35,13 +35,13 @@ gc = gspread.authorize(creds)
 users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
 logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 
-# === BASIC AUTH ===
+# === AUTH ===
 def require_basic_auth():
     auth = request.authorization
     if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
         return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
 
-# === USER FUNCTIONS ===
+# === USER ===
 def get_user(user_id):
     records = users_sheet.get_all_records()
     for i, row in enumerate(records):
@@ -70,7 +70,7 @@ def log_usage(user_id, action, detail):
     now = datetime.now().isoformat()
     logs_sheet.append_row([now, user_id, action, detail])
 
-# === LINE FUNCTIONS ===
+# === LINE ===
 def send_line_message(reply_token, text):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
@@ -99,8 +99,8 @@ def send_payment_request(user_id):
                 "layout": "vertical",
                 "contents": [
                     {"type": "text", "text": "📌 สแกนจ่ายผ่าน PromptPay", "weight": "bold", "size": "md"},
-                    {"type": "text", "text": "บัญชี: นาย วัฒนา จันดาหาร", "size": "sm", "wrap": True},
-                    {"type": "text", "text": "คำถามละ 1 บาท — แนบสลิปภายหลัง", "size": "sm", "wrap": True}
+                    {"type": "text", "text": "บัญชี: นาย วัฒนา จันดาหาร", "size": "sm"},
+                    {"type": "text", "text": "คำถามละ 1 บาท — แนบสลิปภายหลัง", "size": "sm"}
                 ]
             }
         }
@@ -126,7 +126,7 @@ def send_flex_upload_link(user_id):
                 "layout": "vertical",
                 "contents": [
                     {"type": "text", "text": "แนบสลิปเพื่อเปิดสิทธิ์ดูดวง AI", "weight": "bold", "size": "md"},
-                    {"type": "text", "text": "สมัครใช้งานดวงจิต AI ขั้นตอนสุดท้าย", "size": "sm", "wrap": True}
+                    {"type": "text", "text": "สมัครใช้งานดวงจิต AI ขั้นตอนสุดท้าย", "size": "sm"}
                 ]
             },
             "footer": {
@@ -147,7 +147,7 @@ def send_flex_upload_link(user_id):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
 
-# === AI ฟีเจอร์ ===
+# === AI ===
 def get_fortune(message):
     prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
     try:
@@ -160,7 +160,7 @@ def get_fortune(message):
         print("❌ GPT ERROR:", e)
         return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
 
-# === OCR ตรวจสลิป ===
+# === OCR ===
 def extract_payment_info(text):
     name = re.search(r"(ชื่อ[^\n\r]+)", text)
     amount = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?", text)
