@@ -1,22 +1,20 @@
-# ✅ ใช้ base image เป็น python 3.11 แบบ slim (ประหยัด)
-FROM python:3.11-slim
+# Dockerfile
+FROM python:3.13-slim
 
-# ✅ ติดตั้ง tesseract + ภาษาไทย + dependency ภาพ
+# ติดตั้ง system dependencies รวมถึง tesseract และภาษาไทย
 RUN apt-get update && \
-    apt-get install -y \
-        tesseract-ocr \
-        tesseract-ocr-tha \
-        libglib2.0-0 libsm6 libxrender1 libxext6 && \
-    apt-get clean
+    apt-get install -y tesseract-ocr tesseract-ocr-tha libglib2.0-0 libsm6 libxrender1 libxext6 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# ✅ ตั้งค่าที่เก็บโค้ดใน container
+# สร้าง working directory
 WORKDIR /app
 
-# ✅ คัดลอกไฟล์ทั้งหมดจากเครื่อง → เข้า container
+# คัดลอกโค้ดทั้งหมดลงใน container
 COPY . .
 
-# ✅ ติดตั้งไลบรารี Python
+# ติดตั้ง dependencies จาก requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ✅ รัน Flask ด้วย gunicorn (port 8000)
-CMD ["gunicorn", "app:application", "--bind", "0.0.0.0:8000"]
+# รันแอป Flask ด้วย gunicorn
+CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:application"]
+
