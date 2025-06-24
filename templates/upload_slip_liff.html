@@ -1,25 +1,70 @@
 <!DOCTYPE html>
-<html>
+<html lang="th">
 <head>
+  <meta charset="UTF-8">
   <title>แนบสลิป (LIFF)</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 400px;
+      margin: 30px auto;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+    }
+    label {
+      margin-top: 10px;
+      display: block;
+    }
+    input, button {
+      width: 100%;
+      margin-top: 5px;
+      padding: 10px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #06c755;
+      color: white;
+      border: none;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #04a44a;
+    }
+  </style>
 </head>
 <body>
-  <h2>แนบสลิปผ่าน LIFF</h2>
+  <h2>📤 แนบสลิปเพื่อเปิดสิทธิ์</h2>
   <form id="slipForm" method="POST" enctype="multipart/form-data" action="/upload-slip">
     <input type="hidden" name="user_id" id="user_id">
-    <label>ชื่อของคุณ:</label><br>
-    <input type="text" name="user_name" required><br>
-    <label>แนบไฟล์สลิป:</label><br>
-    <input type="file" name="file" accept="image/*" required><br><br>
-    <button type="submit">ส่งสลิป</button>
+    
+    <label for="user_name">ชื่อของคุณ:</label>
+    <input type="text" name="user_name" id="user_name" required>
+
+    <label for="file">แนบไฟล์สลิป (รูปภาพ):</label>
+    <input type="file" name="file" id="file" accept="image/*" required>
+
+    <button type="submit">✅ ส่งสลิป</button>
   </form>
+
   <script>
-    liff.init({ liffId: "{{ liff_id }}" }).then(() => {
-      liff.getProfile().then(profile => {
+    liff.init({ liffId: "{{ liff_id }}" })
+      .then(() => {
+        return liff.getProfile();
+      })
+      .then(profile => {
         document.getElementById("user_id").value = profile.userId;
+      })
+      .catch(err => {
+        alert("ไม่สามารถโหลด LIFF ได้: " + err.message);
       });
-    });
   </script>
 </body>
 </html>
