@@ -1,24 +1,29 @@
-# ใช้ base image Python 3.13 ที่เบา
+# Base image Python 3.11 slim
 FROM python:3.11-slim
 
 # ติดตั้ง dependencies ของระบบ + Tesseract ภาษาไทย
 RUN apt-get update && \
-    apt-get install -y tesseract-ocr tesseract-ocr-tha libglib2.0-0 libsm6 libxrender1 libxext6 && \
-    tesseract --list-langs && \
+    apt-get install -y \
+        tesseract-ocr \
+        tesseract-ocr-tha \
+        libglib2.0-0 \
+        libsm6 \
+        libxrender1 \
+        libxext6 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# กำหนดโฟลเดอร์ทำงาน
+# ตั้ง working directory
 WORKDIR /app
 
-# คัดลอกไฟล์ทั้งหมดเข้า container
+# คัดลอกทุกไฟล์จากโฟลเดอร์โปรเจกต์
 COPY . .
 
-# ตั้งค่าตำแหน่งไฟล์ Service Account สำหรับ Google Sheets API
-ENV GOOGLE_APPLICATION_CREDENTIALS="/app/duangjit-ai-808449ecaf0c.json"
+# ตั้ง ENV ให้รู้ path ไปยัง Service Account JSON
+ENV GOOGLE_APPLICATION_CREDENTIALS=/app/duangjit-ai-808449ecaf0c.json
 
 # ติดตั้ง Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ใช้ Gunicorn เพื่อรัน Flask app (port 10000 สำหรับ Render)
+# ให้ Gunicorn รันแอป Flask ที่ชื่อ application ใน app.py
 CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:application", "--timeout", "90", "--workers", "1"]
 
