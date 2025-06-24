@@ -17,8 +17,14 @@ SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS", "Users")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS", "Logs")
 LIFF_ID = os.getenv("LIFF_ID")
 
-# === Google Sheets Setup via JSON String ===
-service_account_info = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+# === อ่าน Service Account JSON จาก path ที่กำหนดใน ENV ===
+GOOGLE_JSON_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+if not GOOGLE_JSON_PATH or not os.path.exists(GOOGLE_JSON_PATH):
+    raise ValueError("❌ ไม่พบไฟล์ Service Account JSON ที่ระบุใน GOOGLE_APPLICATION_CREDENTIALS")
+
+with open(GOOGLE_JSON_PATH, 'r') as f:
+    service_account_info = json.load(f)
+
 scope = ["https://www.googleapis.com/auth/spreadsheets"]
 credentials = Credentials.from_service_account_info(service_account_info, scopes=scope)
 client_gsheet = gspread.authorize(credentials)
@@ -73,7 +79,7 @@ def admin_dashboard():
     chart_data = sorted(usage_counter.items())
     return render_template("admin_dashboard.html", chart_data=chart_data)
 
-# === Route: Upload Slip (Liff UI) ===
+# === Route: Upload Slip (LIFF UI) ===
 @app.route("/upload-slip", methods=["GET", "POST"])
 def upload_slip():
     if request.method == "POST":
@@ -100,6 +106,6 @@ def upload_slip():
 if __name__ == "__main__":
     app.run(debug=True)
 
-# === Gunicorn compatibility ===
+# === For Gunicorn ===
 application = app
 
