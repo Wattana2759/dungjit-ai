@@ -8,7 +8,7 @@ import pytesseract
 import gspread
 from google.oauth2.service_account import Credentials
 import re
-import openai  # ✅ ใช้เวอร์ชันนี้แทนจาก openai import OpenAI
+from openai import OpenAI
 
 # === LOAD ENV ===
 load_dotenv()
@@ -25,7 +25,7 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
-openai.api_key = OPENAI_API_KEY  # ✅ แบบที่ใช้ได้กับ Render
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # === GOOGLE SHEETS ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -159,11 +159,11 @@ def send_flex_upload_link(user_id):
 def get_fortune(message):
     prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
         )
-        return response.choices[0].message["content"].strip()
+        return response.choices[0].message.content.strip()
     except Exception:
         return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
 
