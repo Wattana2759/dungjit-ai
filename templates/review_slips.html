@@ -1,22 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <title>ตรวจสอบสลิป</title>
+    <meta charset="UTF-8">
+    <title>Review Slips</title>
 </head>
 <body>
-  <h2>รายการสลิปจากผู้ใช้</h2>
-  {% for u in users %}
-    <div style="margin-bottom: 20px;">
-      <p><strong>UserID:</strong> {{ u.user_id }}</p>
-      <img src="/static/slips/{{ u.slip }}" width="300"><br>
-      <form method="POST" action="/review-slip-action">
-        <input type="hidden" name="user_id" value="{{ u.user_id }}">
-        <button type="submit" name="action" value="approve">✅ อนุมัติ</button>
-        <button type="submit" name="action" value="reject">❌ ปฏิเสธ</button>
-      </form>
-    </div>
-  {% endfor %}
+    <h2>ตรวจสอบสลิป</h2>
+    <table border="1">
+        <tr><th>User ID</th><th>Slip</th><th>Action</th></tr>
+        {% for user in users %}
+        <tr>
+            <td>{{ user['user_id'] }}</td>
+            <td><img src="/static/slips/{{ user['slip'] }}" width="150"></td>
+            <td>
+                <form action="/review-slip-action" method="post">
+                    <input type="hidden" name="user_id" value="{{ user['user_id'] }}">
+                    <button name="action" value="approve">✅ อนุมัติ</button>
+                    <button name="action" value="reject">❌ ปฏิเสธ</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
 </body>
 </html>
 

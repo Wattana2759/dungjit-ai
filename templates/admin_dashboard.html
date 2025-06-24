@@ -1,25 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="th">
 <head>
   <meta charset="UTF-8">
-  <title>Admin Dashboard</title>
+  <title>สถิติการใช้งาน</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <h2>สถิติการใช้งาน</h2>
-  <canvas id="usageChart" width="400" height="200"></canvas>
+  <h2>กราฟการใช้งานดวงจิต AI (รายวัน)</h2>
+  <canvas id="usageChart" width="600" height="300"></canvas>
   <script>
-    const ctx = document.getElementById('usageChart').getContext('2d');
-    const chartData = {{ chart_data | tojson }};
-    const labels = chartData.map(item => item[0]);
-    const data = chartData.map(item => item[1]);
-    new Chart(ctx, {
+    const ctx = document.getElementById('usageChart');
+    const chart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: labels,
+        labels: {{ chart_data | map(attribute=0) | list }},
         datasets: [{
-          label: 'จำนวนการถามดวง',
-          data: data,
+          label: 'จำนวนครั้งที่ใช้',
+          data: {{ chart_data | map(attribute=1) | list }},
+          backgroundColor: 'rgba(75, 192, 192, 0.6)'
         }]
       }
     });

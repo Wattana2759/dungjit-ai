@@ -1,3 +1,4 @@
+<!-- templates/liff_login.html -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -9,14 +10,12 @@
   <h3>กำลังเข้าสู่ระบบผ่าน LINE...</h3>
   <script>
     async function main() {
-      await liff.init({ liffId: "{{ liff_id }}" })
-      if (!liff.isLoggedIn()) liff.login()
-      const profile = await liff.getProfile()
-      alert("👤 สวัสดีคุณ " + profile.displayName)
-      // คุณสามารถส่ง profile.userId หรือชื่อไปเก็บต่อได้ที่นี่
+      await liff.init({ liffId: "{{ liff_id }}" });
+      if (!liff.isLoggedIn()) liff.login();
+      const profile = await liff.getProfile();
+      alert("👤 ยินดีต้อนรับ " + profile.displayName);
     }
-    main()
+    main();
   </script>
 </body>
 </html>
-

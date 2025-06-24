@@ -18,7 +18,11 @@ SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS", "Logs")
 LIFF_ID = os.getenv("LIFF_ID")
 
 # === Google Sheets Setup via JSON String ===
-service_account_info = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+service_account_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+if not service_account_json:
+    raise ValueError("❌ GOOGLE_CREDENTIALS_JSON ไม่ถูกกำหนดใน .env หรือ ENV")
+service_account_info = json.loads(service_account_json)
+
 scope = ["https://www.googleapis.com/auth/spreadsheets"]
 credentials = Credentials.from_service_account_info(service_account_info, scopes=scope)
 client_gsheet = gspread.authorize(credentials)
@@ -73,7 +77,7 @@ def admin_dashboard():
     chart_data = sorted(usage_counter.items())
     return render_template("admin_dashboard.html", chart_data=chart_data)
 
-# === Route: Upload Slip (Liff UI) ===
+# === Route: Upload Slip (LIFF UI) ===
 @app.route("/upload-slip", methods=["GET", "POST"])
 def upload_slip():
     if request.method == "POST":
@@ -96,10 +100,10 @@ def upload_slip():
 
     return render_template("upload_slip_liff.html", liff_id=LIFF_ID)
 
-# === Main App Run ===
+# === Main Run (Local) ===
 if __name__ == "__main__":
     app.run(debug=True)
 
-# === Gunicorn compatibility ===
+# === Gunicorn WSGI compatibility ===
 application = app
 
