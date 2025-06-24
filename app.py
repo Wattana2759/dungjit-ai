@@ -8,7 +8,7 @@ import pytesseract
 import gspread
 from google.oauth2.service_account import Credentials
 import re
-import openai  # ← ใช้เวอร์ชันใหม่
+import openai
 from werkzeug.utils import secure_filename
 
 # === LOAD ENV ===
@@ -28,7 +28,19 @@ ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
 # === SETUP GOOGLE SHEETS ===
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-credentials = Credentials.from_service_account_file("google-credentials.json", scopes=scope)
+service_account_info = {
+    "type": os.getenv("GOOGLE_TYPE"),
+    "project_id": os.getenv("GOOGLE_PROJECT_ID"),
+    "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
+    "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace("\\n", "\n"),
+    "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
+    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+    "auth_uri": os.getenv("GOOGLE_AUTH_URI"),
+    "token_uri": os.getenv("GOOGLE_TOKEN_URI"),
+    "auth_provider_x509_cert_url": os.getenv("GOOGLE_AUTH_PROVIDER_X509_CERT_URL"),
+    "client_x509_cert_url": os.getenv("GOOGLE_CLIENT_X509_CERT_URL")
+}
+credentials = Credentials.from_service_account_info(service_account_info, scopes=scope)
 client_gsheet = gspread.authorize(credentials)
 sheet_users = client_gsheet.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
 sheet_logs = client_gsheet.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
@@ -52,12 +64,12 @@ def webhook():
                 user_id = event["source"]["userId"]
                 message_text = event["message"]["text"]
 
-                # ตรวจสอบ quota / สิทธิ์ใช้งาน
+                # ตรวจสอบ quota
                 if not check_user_permission(user_id):
                     reply_line(reply_token, "❌ กรุณาแนบสลิปชำระเงินก่อนใช้งานได้ที่: " + PUBLIC_URL + "/upload")
                     return "OK"
 
-                # เรียก GPT
+                # ตอบด้วย GPT
                 reply = ask_openai(message_text)
                 reply_line(reply_token, reply)
 
@@ -122,7 +134,6 @@ def upload():
             if match:
                 amount = float(match.group(2).replace(",", ""))
                 usage = int(amount)
-                # อัปเดตสิทธิ์ใน Google Sheet
                 add_or_update_user(user_id, usage)
                 return "✅ ระบบได้รับสลิปแล้ว คุณได้รับสิทธิ์ " + str(usage) + " ข้อความ"
             return "❌ ไม่พบยอดเงินในสลิป กรุณาตรวจสอบใหม่"
@@ -136,7 +147,6 @@ def add_or_update_user(user_id, quota):
             new_quota = int(user.get("Quota", 0)) + quota
             sheet_users.update_cell(row, 3, new_quota)
             return
-    # ถ้ายังไม่มี user นี้
     sheet_users.append_row([user_id, str(datetime.now()), quota])
 
 @app.route("/admin", methods=["GET"])
