@@ -2,11 +2,8 @@ from flask import Flask, request, jsonify, render_template, Response
 import os, requests, re
 from datetime import datetime
 from dotenv import load_dotenv
-from PIL import Image
-import pytesseract
 import gspread
 from google.oauth2.service_account import Credentials
-import openai
 
 # === LOAD ENV ===
 load_dotenv()
@@ -14,15 +11,9 @@ app = Flask(__name__)
 
 # === ENV CONFIG ===
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
-SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
-LIFF_ID = os.getenv("LIFF_ID")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
-ADMIN_USER = os.getenv("ADMIN_USER", "admin")
-ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
-openai.api_key = OPENAI_API_KEY
 
 # === GOOGLE SHEETS ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -41,7 +32,6 @@ service_account_info = {
 creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
 gc = gspread.authorize(creds)
 users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
-logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 
 # === USER MANAGEMENT ===
 def get_user(user_id):
@@ -74,32 +64,30 @@ def push_line_message(user_id, text):
     print("LINE Text Response:", response.status_code, response.text)
 
 def send_invite_link(user_id):
-    line_oa_id = "@duangjitai"
-    share_url = f"https://line.me/R/oaMessage/{line_oa_id}/?ref={user_id}"
+    share_url = f"{PUBLIC_URL}/shared?user_id={user_id}"
     flex = {
         "type": "flex",
-        "altText": "🏱 ชวนเพื่อนรับสิทธิ์ฟรี",
+        "altText": "🏱 แชร์บอทรับสิทธิ์",
         "contents": {
             "type": "bubble",
             "body": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    {"type": "text", "text": "🏱 ชวนเพื่อน รับสิทธิ์ฟรี 1 ครั้ง / เพื่อน 1 คน!", "weight": "bold", "size": "md", "wrap": True},
-                    {"type": "text", "text": "แชร์ลิงก์นี้ให้เพื่อนเพิ่มเพื่อน แล้วคุณจะได้รับสิทธิ์ทุกครั้ง!", "size": "sm", "wrap": True}
+                    {"type": "text", "text": "🏱 แชร์ลิงก์รับสิทธิ์ฟรี 1 ครั้ง", "weight": "bold", "size": "md"},
+                    {"type": "text", "text": "กดปุ่มด้านล่างเพื่อแชร์ลิงก์ให้เพื่อน", "size": "sm", "wrap": True}
                 ]
             },
             "footer": {
                 "type": "box",
                 "layout": "vertical",
-                "spacing": "sm",
                 "contents": [
                     {
                         "type": "button",
                         "style": "primary",
                         "action": {
                             "type": "uri",
-                            "label": "📤 แชร์ลิงก์ให้เพื่อน",
+                            "label": "📤 แชร์ลิงก์",
                             "uri": share_url
                         }
                     }
@@ -120,27 +108,14 @@ def webhook():
         event_type = event["type"]
         user_id = event["source"]["userId"]
 
-        if event_type == "follow":
-            referrer_id = request.args.get("ref", "")
-            if referrer_id and referrer_id != user_id:
-                ref_user, ref_row = get_user(referrer_id)
-                if ref_user:
-                    new_quota = int(ref_user["paid_quota"]) + 1
-                    users_sheet.update_cell(ref_row, 4, new_quota)
-                    push_line_message(referrer_id, "\ud83c\udf89 เพื่อนของคุณเข้าร่วมแล้ว! รับสิทธิ์เพิ่ม 1 ครั้ง ✅")
-            add_or_update_user(user_id, "New User", 0, "ref")
-            push_line_message(user_id, "ยินดีต้อนรับ! แชร์บอทให้เพื่อน แล้วคุณจะได้รับสิทธิ์เพิ่มทุกครั้งที่มีเพื่อนเพิ่มเพื่อนผ่านลิงก์ของคุณ")
-            continue
-
         if event_type != "message" or event["message"]["type"] != "text":
             continue
 
         message_text = event["message"]["text"].strip()
-        reply_token = event["replyToken"]
         user, _ = get_user(user_id)
 
         if not user or int(user["paid_quota"]) <= int(user["usage"]):
-            push_line_message(user_id, "📌 คุณยังไม่มีสิทธิ์ใช้งาน")
+            push_line_message(user_id, "\ud83d\udccd คุณยังไม่มีสิทธิ์ใช้งาน")
             send_invite_link(user_id)
             continue
 
@@ -149,6 +124,22 @@ def webhook():
         update_user(user_id, usage=int(user["usage"]) + 1)
 
     return jsonify({"status": "ok"})
+
+# === SHARE REWARD ===
+@app.route("/shared")
+def shared_link_clicked():
+    user_id = request.args.get("user_id")
+    if not user_id:
+        return "Missing user_id", 400
+
+    user, row = get_user(user_id)
+    if not user:
+        return "User not found", 404
+
+    current_quota = int(user["paid_quota"])
+    users_sheet.update_cell(row, 4, current_quota + 1)
+    push_line_message(user_id, "🎁 ขอบคุณที่แชร์! คุณได้รับสิทธิ์เพิ่ม 1 ครั้งแล้ว ✅")
+    return "✅ Shared successfully"
 
 application = app
 
