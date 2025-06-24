@@ -25,7 +25,7 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
-openai.api_key = OPENAI_API_KEY  # ✅ ใช้รูปแบบของ openai==0.28.1
+openai.api_key = OPENAI_API_KEY  # ✅ ใช้ openai==0.28.1
 
 # === GOOGLE SHEETS ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
