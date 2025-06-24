@@ -2,7 +2,7 @@ services:
   - type: web
     name: dungjit-ai
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: ""
     startCommand: gunicorn app:application
     envVars:
       - key: LINE_ACCESS_TOKEN
