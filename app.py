@@ -25,9 +25,9 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
-openai.api_key = OPENAI_API_KEY  # ✅ สำหรับ openai==0.28.1
+openai.api_key = OPENAI_API_KEY  # ✅ ใช้กับ openai==0.28.1
 
-# === GOOGLE SHEETS ===
+# === GOOGLE SHEETS SETUP ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 service_account_info = {
     "type": os.getenv("GOOGLE_TYPE"),
@@ -52,7 +52,7 @@ def require_basic_auth():
     if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
         return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
 
-# === USER FUNCTIONS ===
+# === USER SHEET FUNCTIONS ===
 def get_user(user_id):
     records = users_sheet.get_all_records()
     for i, row in enumerate(records):
@@ -72,7 +72,7 @@ def add_or_update_user(user_id, name, added_quota, slip_file):
     user, row = get_user(user_id)
     now = datetime.now().isoformat()
     if user:
-        new_quota = user["paid_quota"] + added_quota
+        new_quota = int(user["paid_quota"]) + added_quota
         users_sheet.update(f"C{row}:F{row}", [[user["usage"], new_quota, slip_file, now]])
     else:
         users_sheet.append_row([user_id, name, 0, added_quota, slip_file, now])
@@ -101,14 +101,10 @@ def send_payment_request(user_id):
             "hero": {
                 "type": "image",
                 "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647509/qr_promptpay_rzompe.jpg",
-                "size": "full",
-                "aspectRatio": "1:1",
-                "aspectMode": "cover"
+                "size": "full", "aspectRatio": "1:1", "aspectMode": "cover"
             },
             "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
+                "type": "box", "layout": "vertical", "contents": [
                     {"type": "text", "text": "📌 สแกนจ่ายผ่าน PromptPay", "weight": "bold", "size": "md"},
                     {"type": "text", "text": "บัญชี: นาย วัฒนา จันดาหาร", "size": "sm", "wrap": True},
                     {"type": "text", "text": "คำถามละ 1 บาท — แนบสลิปภายหลัง", "size": "sm", "wrap": True}
@@ -128,25 +124,21 @@ def send_flex_upload_link(user_id):
             "hero": {
                 "type": "image",
                 "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
-                "size": "full",
-                "aspectRatio": "16:9",
-                "aspectMode": "cover"
+                "size": "full", "aspectRatio": "16:9", "aspectMode": "cover"
             },
             "body": {
-                "type": "box",
-                "layout": "vertical",
+                "type": "box", "layout": "vertical",
                 "contents": [{"type": "text", "text": "แนบสลิปเพื่อรับสิทธิ์", "weight": "bold", "size": "md"}]
             },
             "footer": {
-                "type": "box",
-                "layout": "vertical",
+                "type": "box", "layout": "vertical",
                 "contents": [{
                     "type": "button",
                     "style": "primary",
                     "action": {
                         "type": "uri",
                         "label": "แนบสลิปตอนนี้",
-                        "uri": "https://liff.line.me/2007541798-GneVaZEy"
+                        "uri": "https://liff.line.me/" + LIFF_ID
                     }
                 }]
             }
@@ -155,7 +147,7 @@ def send_flex_upload_link(user_id):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
 
-# === AI ฟีเจอร์ ===
+# === AI หมอดูไทย ===
 def get_fortune(message):
     prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
     try:
@@ -167,7 +159,7 @@ def get_fortune(message):
     except Exception as e:
         return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
-# === OCR ตรวจสลิป ===
+# === OCR สลิป ===
 def extract_payment_info(text):
     name = re.search(r"(ชื่อ[^\n\r]+)", text)
     amount = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?", text)
@@ -185,16 +177,15 @@ def home():
 def webhook():
     data = request.json
     for event in data.get("events", []):
-        # ✅ ป้องกัน usage เพิ่มจาก event ที่ไม่ใช่ข้อความ
         if event["type"] != "message" or event["message"]["type"] != "text":
             continue
 
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
-        message_text = event["message"]["text"]
+        message_text = event["message"]["text"].strip()
 
         user, _ = get_user(user_id)
-        if message_text.strip().lower() == "/ดูสิทธิ์":
+        if message_text.lower() == "/ดูสิทธิ์":
             if not user:
                 send_line_message(reply_token, "คุณยังไม่มีสิทธิ์ใช้งาน")
             else:
@@ -257,6 +248,6 @@ def test_sheet():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-# === EXPORT ===
+# === EXPORT TO RENDER ===
 application = app
 
