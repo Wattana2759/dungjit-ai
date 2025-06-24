@@ -1,7 +1,6 @@
-# Base image Python 3.11 slim
 FROM python:3.11-slim
 
-# ติดตั้ง dependencies ของระบบ + Tesseract ภาษาไทย
+# ติดตั้ง system dependencies ที่จำเป็นสำหรับ OCR และ OpenCV
 RUN apt-get update && \
     apt-get install -y \
         tesseract-ocr \
@@ -9,21 +8,22 @@ RUN apt-get update && \
         libglib2.0-0 \
         libsm6 \
         libxrender1 \
-        libxext6 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+        libxext6 \
+        libgl1 \
+        && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ตั้ง working directory
 WORKDIR /app
 
-# คัดลอกทุกไฟล์จากโฟลเดอร์โปรเจกต์
+# คัดลอกไฟล์ทั้งหมด
 COPY . .
 
-# ตั้ง ENV ให้รู้ path ไปยัง Service Account JSON
-ENV GOOGLE_APPLICATION_CREDENTIALS=/app/duangjit-ai-808449ecaf0c.json
-
 # ติดตั้ง Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip
+RUN pip install --no-cache-dir --extra-index-url https://pypi.org/simple \
+    opencv-python-headless==4.8.0.76 \
+    -r requirements.txt
 
-# ให้ Gunicorn รันแอป Flask ที่ชื่อ application ใน app.py
-CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:application", "--timeout", "90", "--workers", "1"]
+# เริ่มรันแอป Flask ด้วย Gunicorn
+CMD ["gunicorn", "app:application", "--bind", "0.0.0.0:10000"]
 
