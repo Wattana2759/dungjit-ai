@@ -1,12 +1,14 @@
-flask
-gunicorn
+Flask
 openai==0.28.1
+python-dotenv
 pytesseract
 Pillow
-python-dotenv
 gspread
+oauth2client
 google-auth
 google-auth-oauthlib
+google-auth-httplib2
 celery
 redis
+opencv-python-headless
 
