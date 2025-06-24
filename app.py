@@ -96,6 +96,37 @@ def push_line_message(user_id, text):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
+def send_flex_upload_link(user_id):
+    flex_message = {
+        "type": "flex",
+        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน ดวงจิต AI",
+        "contents": {
+            "type": "bubble",
+            "hero": {
+                "type": "image",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
+                "size": "full", "aspectRatio": "16:9", "aspectMode": "cover"
+            },
+            "body": {
+                "type": "box", "layout": "vertical",
+                "contents": [{"type": "text", "text": "แนบสลิปเพื่อรับสิทธิ์", "weight": "bold", "size": "md"}]
+            },
+            "footer": {
+                "type": "box", "layout": "vertical",
+                "contents": [{
+                    "type": "button",
+                    "style": "primary",
+                    "action": {
+                        "type": "uri",
+                        "label": "แนบสลิปตอนนี้",
+                        "uri": "https://liff.line.me/" + LIFF_ID
+                    }
+                }]
+            }
+        }
+    }
+    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})    
 
 # === หมอดู AI GPT ===
 def get_fortune(message):
