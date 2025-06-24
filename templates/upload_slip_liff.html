@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <title>แนบสลิป (LIFF)</title>
+  <title>แนบสลิปผ่าน LIFF</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body {
@@ -10,61 +10,104 @@
       max-width: 400px;
       margin: 30px auto;
       padding: 20px;
-      background: #f9f9f9;
+      background: url('https://res.cloudinary.com/dwg28idpf/image/upload/v1750748781/ChatGPT_Image_24_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_14_05_21_doievv.png') no-repeat center center;
+      background-size: cover;
       border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    h2 {
-      text-align: center;
+      color: white;
+      backdrop-filter: brightness(0.9);
     }
     label {
-      margin-top: 10px;
       display: block;
+      margin-top: 10px;
     }
     input, button {
       width: 100%;
-      margin-top: 5px;
       padding: 10px;
-      font-size: 16px;
-      box-sizing: border-box;
-    }
-    button {
-      background-color: #06c755;
-      color: white;
+      margin-top: 5px;
       border: none;
-      margin-top: 20px;
-      cursor: pointer;
+      border-radius: 5px;
     }
-    button:hover {
-      background-color: #04a44a;
+    img#preview {
+      display: none;
+      max-width: 100%;
+      margin-top: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    }
+    .result {
+      background: rgba(0, 255, 0, 0.2);
+      padding: 10px;
+      margin-top: 20px;
+      border-radius: 8px;
+      display: none;
+      color: #fff;
     }
   </style>
 </head>
 <body>
-  <h2>📤 แนบสลิปเพื่อเปิดสิทธิ์</h2>
-  <form id="slipForm" method="POST" enctype="multipart/form-data" action="/upload-slip">
+  <h2>🔮 แนบสลิปเพื่อเปิดสิทธิ์ดูดวง</h2>
+  <form id="slipForm">
     <input type="hidden" name="user_id" id="user_id">
-    
-    <label for="user_name">ชื่อของคุณ:</label>
+    <label>ชื่อของคุณ:</label>
     <input type="text" name="user_name" id="user_name" required>
 
-    <label for="file">แนบไฟล์สลิป (รูปภาพ):</label>
+    <label>แนบไฟล์สลิป:</label>
     <input type="file" name="file" id="file" accept="image/*" required>
+    <img id="preview" src="#" alt="Preview">
 
     <button type="submit">✅ ส่งสลิป</button>
   </form>
 
+  <div class="result" id="resultBox">
+    ✅ ส่งสลิปสำเร็จ! เพิ่มสิทธิ์ <span id="addedQuota"></span> ครั้ง 🎉
+  </div>
+
   <script>
+    // ===== LIFF Init =====
     liff.init({ liffId: "{{ liff_id }}" })
-      .then(() => {
-        return liff.getProfile();
-      })
+      .then(() => liff.getProfile())
       .then(profile => {
         document.getElementById("user_id").value = profile.userId;
+        document.getElementById("user_name").value = profile.displayName;
       })
-      .catch(err => {
-        alert("ไม่สามารถโหลด LIFF ได้: " + err.message);
-      });
+      .catch(err => alert("LIFF error: " + err.message));
+
+    // ===== Preview Image =====
+    document.getElementById("file").addEventListener("change", function () {
+      const file = this.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = document.getElementById("preview");
+          img.src = e.target.result;
+          img.style.display = "block";
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // ===== Submit Form =====
+    document.getElementById("slipForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const form = document.getElementById("slipForm");
+      const formData = new FormData(form);
+      fetch("/upload-slip", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          document.getElementById("addedQuota").textContent = data.amount_paid;
+          document.getElementById("resultBox").style.display = "block";
+          form.reset();
+          document.getElementById("preview").style.display = "none";
+        } else {
+          alert("❌ ส่งไม่สำเร็จ: " + (data.message || "เกิดข้อผิดพลาด"));
+        }
+      })
+      .catch(err => alert("❌ Error: " + err.message));
+    });
   </script>
 </body>
 </html>
