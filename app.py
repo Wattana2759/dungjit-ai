@@ -84,7 +84,8 @@ def is_duplicate_log(user_id, message_text, max_rows=20):
             if len(row) >= 4 and row[1] == user_id and row[3] == message_text:
                 return True
         return False
-    except: return False
+    except:
+        return False
 
 # === LINE MESSAGES ===
 def send_line_message(reply_token, text):
@@ -96,6 +97,7 @@ def push_line_message(user_id, text):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
+
 def send_flex_upload_link(user_id):
     flex_message = {
         "type": "flex",
@@ -126,7 +128,7 @@ def send_flex_upload_link(user_id):
         }
     }
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})    
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
 
 # === หมอดู AI GPT ===
 def get_fortune(message):
@@ -174,7 +176,7 @@ def webhook():
 
         if not user or int(user["paid_quota"]) <= int(user["usage"]):
             push_line_message(user_id, "📌 กรุณาชำระเงินผ่าน PromptPay เพื่อใช้งาน")
-            push_line_message(user_id, "📤 แนบสลิปหลังชำระเงินที่นี่: https://liff.line.me/" + LIFF_ID)
+            send_flex_upload_link(user_id)
             continue
 
         reply = get_fortune(message_text)
