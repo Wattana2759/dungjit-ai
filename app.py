@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, Response, redirect
+from flask import Flask, request, jsonify, render_template, Response
 import os
 import requests
 from datetime import datetime
@@ -9,7 +9,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 import re
 import openai
-from tasks import process_slip_async
 
 # === LOAD ENV ===
 load_dotenv()
@@ -26,7 +25,7 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
-openai.api_key = OPENAI_API_KEY
+openai.api_key = OPENAI_API_KEY  # ✅ ใช้กับ openai==0.28.1
 
 # === GOOGLE SHEETS SETUP ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -51,9 +50,9 @@ logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 def require_basic_auth():
     auth = request.authorization
     if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
-        return Response("\u0e01\u0e23\u0e38\u0e13\u0e32\u0e40\u0e02\u0e49\u0e32\u0e2a\u0e39\u0e48\u0e23\u0e30\u0e1a\u0e1a", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
+        return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
 
-# === SHEET FUNCTIONS ===
+# === USER SHEET FUNCTIONS ===
 def get_user(user_id):
     records = users_sheet.get_all_records()
     for i, row in enumerate(records):
@@ -93,9 +92,184 @@ def push_line_message(user_id, text):
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
+def send_payment_request(user_id):
+    flex_qr = {
+        "type": "flex",
+        "altText": "กรุณาชำระเงินก่อนแนบสลิป",
+        "contents": {
+            "type": "bubble",
+            "hero": {
+                "type": "image",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647509/qr_promptpay_rzompe.jpg",
+                "size": "full", "aspectRatio": "1:1", "aspectMode": "cover"
+            },
+            "body": {
+                "type": "box", "layout": "vertical", "contents": [
+                    {"type": "text", "text": "📌 สแกนจ่ายผ่าน PromptPay", "weight": "bold", "size": "md"},
+                    {"type": "text", "text": "บัญชี: นาย วัฒนา จันดาหาร", "size": "sm", "wrap": True},
+                    {"type": "text", "text": "คำถามละ 1 บาท — แนบสลิปภายหลัง", "size": "sm", "wrap": True}
+                ]
+            }
+        }
+    }
+    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_qr]})
+
+def send_flex_payment_options(user_id):
+    flex_message = {
+        "type": "flex",
+        "altText": "📌 กรุณาชำระเงินผ่านแอปธนาคาร หรือสแกน QR",
+        "contents": {
+            "type": "bubble",
+            "size": "mega",
+            "hero": {
+                "type": "image",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647509/qr_promptpay_rzompe.jpg",
+                "size": "full",
+                "aspectRatio": "1:1",
+                "aspectMode": "cover"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "📌 สแกน QR หรือเลือกธนาคารเพื่อชำระ",
+                        "wrap": True,
+                        "weight": "bold",
+                        "gravity": "center",
+                        "size": "md"
+                    },
+                    {
+                        "type": "text",
+                        "text": "PromptPay: 0970354039\nบัญชี: นาย วัฒนา จันดาหาร\nข้อความละ 1 บาท",
+                        "wrap": True,
+                        "gravity": "center",
+                        "size": "sm",
+                        "color": "#FFFFFFCC"
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "color": "#1DB446",
+                        "action": {
+                            "type": "uri",
+                            "label": "💚 จ่ายด้วย K PLUS",
+                            "uri": "kplus://app/pay?phone=0970354039&amount=10"
+                        }
+                    },
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "color": "#4A2FAD",
+                        "action": {
+                            "type": "uri",
+                            "label": "💜 จ่ายด้วย SCB EASY",
+                            "uri": "scbeasy://payment/transfer?P=0970354039&A=10"
+                        }
+                    },
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "color": "#1BA1E2",
+                        "action": {
+                            "type": "uri",
+                            "label": "💙 Krungthai NEXT",
+                            "uri": "krungthaipay://pay?phone=0970354039&amount=10"
+                        }
+                    },
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "color": "#0C2C84",
+                        "action": {
+                            "type": "uri",
+                            "label": "💙 BBL (Bangkok Bank)",
+                            "uri": "bblmobilebanking://pay?phone=0970354039&amount=10"
+                        }
+                    },
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "color": "#EC6B0A",
+                        "action": {
+                            "type": "uri",
+                            "label": "🧡 TTB Touch",
+                            "uri": "ttb://payment?phone=0970354039&amount=10"
+                        }
+                    },
+                    {
+                        "type": "separator"
+                    },
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "color": "#ffffff",
+                        "action": {
+                            "type": "uri",
+                            "label": "📤 แนบสลิปหลังชำระเงิน",
+                            "uri": "https://liff.line.me/" + LIFF_ID
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
+    headers = {
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={
+        "to": user_id,
+        "messages": [flex_message]
+    })
+
+def send_flex_upload_link(user_id):
+    flex_message = {
+        "type": "flex",
+        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน ดวงจิต AI",
+        "contents": {
+            "type": "bubble",
+            "hero": {
+                "type": "image",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
+                "size": "full", "aspectRatio": "16:9", "aspectMode": "cover"
+            },
+            "body": {
+                "type": "box", "layout": "vertical",
+                "contents": [{"type": "text", "text": "แนบสลิปเพื่อรับสิทธิ์", "weight": "bold", "size": "md"}]
+            },
+            "footer": {
+                "type": "box", "layout": "vertical",
+                "contents": [{
+                    "type": "button",
+                    "style": "primary",
+                    "action": {
+                        "type": "uri",
+                        "label": "แนบสลิปตอนนี้",
+                        "uri": "https://liff.line.me/" + LIFF_ID
+                    }
+                }]
+            }
+        }
+    }
+    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
+
 # === AI หมอดูไทย ===
 def get_fortune(message):
-    prompt = f"""คุณคือหมอดูไทยโบราณ \n\u0e1c\u0e39\u0e49ใช\u0e49ถ\u0e32\u0e19: \"{message}\" \u0e04\u0e33ต\u0e2dบข\u0e2d\u0e07\u0e2b\u0e21อดู:"""
+    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o",
@@ -103,12 +277,12 @@ def get_fortune(message):
         )
         return response.choices[0].message["content"].strip()
     except Exception as e:
-        return f"\u0e23\u0e30\u0e1a\u0e1a\u0e40\u0e01\u0e34\u0e14: {str(e)}"
+        return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
-# === OCR ช่วยแยกข้อมูลจากข้อความ OCR ===
+# === OCR สลิป ===
 def extract_payment_info(text):
-    name = re.search(r"(\u0e0a\u0e37\u0e48\u0e2d[^\n\r]+)", text)
-    amount = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\\s*(\u0e1a\u0e32\u0e17|\u0e20|\u0e20\u0e32\u0e04)?", text)
+    name = re.search(r"(ชื่อ[^\n\r]+)", text)
+    amount = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?", text)
     return {
         "amount": amount.group(1).replace(",", "") if amount else None,
         "name": name.group(1).strip() if name else None
@@ -139,7 +313,6 @@ def webhook():
             continue
 
         if not user or int(user["paid_quota"]) <= int(user["usage"]):
-            from flex_templates import send_payment_request, send_flex_upload_link
             send_payment_request(user_id)
             send_flex_upload_link(user_id)
             continue
@@ -147,25 +320,30 @@ def webhook():
         reply = get_fortune(message_text)
         send_line_message(reply_token, reply)
         update_user(user_id, usage=int(user["usage"]) + 1)
-        log_usage(user_id, "ใช้งาน", message_text)
+        log_usage(user_id, "ใช้สิทธิ์", message_text)
 
     return jsonify({"status": "ok"})
 
-@app.route("/upload-slip", methods=["POST"])
+@app.route("/upload-slip", methods=["GET", "POST"])
 def upload_slip():
-    user_id = request.form.get("user_id")
-    user_name = request.form.get("user_name")
-    file = request.files.get("file")
-    if not user_id or not file:
-        return "กรุณากรอกข้อมูลให้ครบ", 400
-
-    filename = f"slip_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-    os.makedirs("static/slips", exist_ok=True)
-    path = os.path.join("static/slips", filename)
-    file.save(path)
-
-    process_slip_async.delay(user_id, user_name, path)
-    return redirect("/upload-slip-liff?success=1")
+    if request.method == "POST":
+        user_id = request.form.get("user_id")
+        user_name = request.form.get("user_name")
+        file = request.files.get("file")
+        if not user_id or not file:
+            return "กรุณากรอกข้อมูลให้ครบ", 400
+        filename = f"slip_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+        os.makedirs("static/slips", exist_ok=True)
+        path = f"static/slips/{filename}"
+        file.save(path)
+        ocr_text = pytesseract.image_to_string(Image.open(path), lang="eng+tha")
+        info = extract_payment_info(ocr_text)
+        amount_paid = int(float(info["amount"])) if info["amount"] else 0
+        add_or_update_user(user_id, user_name, amount_paid, filename)
+        push_line_message(user_id, f"📥 ได้รับสลิปแล้ว เพิ่มสิทธิ์ {amount_paid} ครั้งเรียบร้อย ✅")
+        log_usage(user_id, "แนบสลิป", f"OCR: {info}")
+        return render_template("success.html", user_id=user_id)
+    return render_template("upload_form.html")
 
 @app.route("/upload-slip-liff")
 def upload_slip_liff():
@@ -179,19 +357,8 @@ def success_page():
 def admin_dashboard():
     auth = require_basic_auth()
     if auth: return auth
-    user_records = users_sheet.get_all_records()
-    log_records = logs_sheet.get_all_values()[1:]
-    logs = [{"timestamp": row[0], "line_id": row[1], "action": row[2], "detail": row[3]} for row in log_records[-20:]]
-    users = []
-    for u in user_records:
-        users.append({
-            "id": u["user_id"],
-            "name": u.get("name", "-"),
-            "usage": u.get("usage", 0),
-            "paid_quota": u.get("paid_quota", 0),
-            "last_uploaded": u.get("last_uploaded", "-")
-        })
-    return render_template("admin_dashboard.html", users=users, logs=logs)
+    records = users_sheet.get_all_records()
+    return render_template("admin_dashboard.html", users=records)
 
 @app.route("/test-sheet")
 def test_sheet():
@@ -201,6 +368,6 @@ def test_sheet():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-# === EXPORT ===
+# === EXPORT TO RENDER ===
 application = app
 
