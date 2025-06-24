@@ -43,12 +43,6 @@ gc = gspread.authorize(creds)
 users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
 logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 
-# === AUTH ===
-def require_basic_auth():
-    auth = request.authorization
-    if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
-        return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
-
 # === USER MANAGEMENT ===
 def get_user(user_id):
     records = users_sheet.get_all_records()
@@ -63,68 +57,35 @@ def update_user(user_id, usage=None, quota=None):
         if usage is not None: users_sheet.update_cell(row, 3, usage)
         if quota is not None: users_sheet.update_cell(row, 4, quota)
 
-def add_or_update_user(user_id, name, added_quota, slip_file):
+def add_or_update_user(user_id, name, added_quota, ref):
     user, row = get_user(user_id)
     now = datetime.now().isoformat()
     if user:
         new_quota = int(user["paid_quota"]) + added_quota
-        users_sheet.update(f"C{row}:F{row}", [[user["usage"], new_quota, slip_file, now]])
+        users_sheet.update(f"C{row}:F{row}", [[user["usage"], new_quota, ref, now]])
     else:
-        users_sheet.append_row([user_id, name, 0, added_quota, slip_file, now])
-
-def log_usage(user_id, action, detail):
-    now = datetime.now().isoformat()
-    if not is_duplicate_log(user_id, detail):
-        logs_sheet.append_row([now, user_id, action, detail])
-
-def is_duplicate_log(user_id, message_text, max_rows=20):
-    try:
-        recent_rows = logs_sheet.get_all_values()[-max_rows:]
-        for row in recent_rows:
-            if len(row) >= 4 and row[1] == user_id and row[3] == message_text:
-                return True
-        return False
-    except:
-        return False
+        users_sheet.append_row([user_id, name, 0, added_quota, ref, now])
 
 # === LINE MESSAGES ===
-def send_line_message(reply_token, text):
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
 def push_line_message(user_id, text):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
-def send_flex_open_bank(user_id):
-    flex_message = {
+def send_invite_link(user_id):
+    line_oa_id = "@duangjitai"
+    share_url = f"https://line.me/R/oaMessage/{line_oa_id}/?{user_id}"
+    flex = {
         "type": "flex",
-        "altText": "📌 กรุณาชำระเงินผ่านแอปธนาคาร หรือแนบสลิป",
+        "altText": "🏱 ชวนเพื่อนรับสิทธิ์ฟรี",
         "contents": {
             "type": "bubble",
-            "size": "mega",
-            "hero": {
-                "type": "image",
-                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647509/qr_promptpay_rzompe.jpg",
-                "size": "full",
-                "aspectRatio": "1:1",
-                "aspectMode": "cover"
-            },
             "body": {
                 "type": "box",
                 "layout": "vertical",
-                "spacing": "md",
                 "contents": [
-                    {
-                        "type": "text",
-                        "text": "📌 สแกน QR หรือเลือกแอปธนาคารเพื่อชำระ",
-                        "wrap": True,
-                        "weight": "bold",
-                        "gravity": "center",
-                        "size": "md"
-                    }
+                    {"type": "text", "text": "🏱 ชวนเพื่อน รับสิทธิ์ฟรี 5 ครั้ง!", "weight": "bold", "size": "md", "wrap": True},
+                    {"type": "text", "text": "แชร์ลิงก์นี้ให้เพื่อนเพิ่มเพื่อน แล้วคุณจะได้รับสิทธิ์ทันที!", "size": "sm", "wrap": True}
                 ]
             },
             "footer": {
@@ -137,26 +98,8 @@ def send_flex_open_bank(user_id):
                         "style": "primary",
                         "action": {
                             "type": "uri",
-                            "label": "🟣 เปิดแอป SCB Easy",
-                            "uri": "scbeasy://"
-                        }
-                    },
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "action": {
-                            "type": "uri",
-                            "label": "🟢 เปิดแอป K PLUS",
-                            "uri": "kplus://"
-                        }
-                    },
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "action": {
-                            "type": "uri",
-                            "label": "📤 แนบสลิปหลังชำระ",
-                            "uri": f"https://liff.line.me/{LIFF_ID}"
+                            "label": "📤 แชร์ลิงก์ให้เพื่อน",
+                            "uri": share_url
                         }
                     }
                 ]
@@ -164,107 +107,47 @@ def send_flex_open_bank(user_id):
         }
     }
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
+    body = {"to": user_id, "messages": [flex]}
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
-# === AI ดูดวง GPT ===
-def get_fortune(message):
-    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.choices[0].message["content"].strip()
-    except Exception as e:
-        return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
-
-# === OCR อ่านสลิป ===
-def extract_payment_info(text):
-    name = re.search(r"(ชื่อ[^\n\r]+)", text)
-    amount = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?", text)
-    return {
-        "amount": amount.group(1).replace(",", "") if amount else None,
-        "name": name.group(1).strip() if name else None
-    }
-
-# === ROUTES ===
-@app.route("/")
-def home():
-    return "ดวงจิต AI พร้อมใช้งานแล้ว"
-
+# === WEBHOOK ===
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
     for event in data.get("events", []):
-        if event["type"] != "message" or event["message"]["type"] != "text":
-            continue
-        reply_token = event["replyToken"]
+        event_type = event["type"]
         user_id = event["source"]["userId"]
-        message_text = event["message"]["text"].strip()
 
-        user, _ = get_user(user_id)
-        if message_text.lower() == "/ดูสิทธิ์":
-            if not user:
-                send_line_message(reply_token, "คุณยังไม่มีสิทธิ์ใช้งาน")
-            else:
-                send_line_message(reply_token, f"คุณใช้ไปแล้ว {user['usage']} / {user['paid_quota']} ครั้ง")
+        # กรณี follow (เพิ่งแอดเพื่อน)
+        if event_type == "follow":
+            referrer_id = request.args.get("ref", "")
+            if referrer_id and referrer_id != user_id:
+                ref_user, ref_row = get_user(referrer_id)
+                if ref_user:
+                    new_quota = int(ref_user["paid_quota"]) + 5
+                    users_sheet.update_cell(ref_row, 4, new_quota)
+                    push_line_message(referrer_id, "🎉 เพื่อนของคุณเข้าร่วมแล้ว! รับสิทธิ์เพิ่ม 5 ครั้ง ✔️")
+            add_or_update_user(user_id, "New User", 0, "ref")
+            push_line_message(user_id, "ยินดีต้อนรับ! แชร์บอทให้เพื่อน แล้วคุณจะได้บัญชาได้ฟรี 5 ครั้ง")
             continue
+
+        if event_type != "message" or event["message"]["type"] != "text":
+            continue
+
+        message_text = event["message"]["text"].strip()
+        reply_token = event["replyToken"]
+        user, _ = get_user(user_id)
 
         if not user or int(user["paid_quota"]) <= int(user["usage"]):
-            push_line_message(user_id, "📌 กรุณาชำระเงินผ่าน PromptPay เพื่อใช้งาน")
-            send_flex_open_bank(user_id)
+            push_line_message(user_id, "📍 คุณยังไม่มีสิทธิ์ใช้งาน")
+            send_invite_link(user_id)
             continue
 
-        reply = get_fortune(message_text)
-        send_line_message(reply_token, reply)
+        reply = f"คุณถึง: {message_text} \nฟังได้ กำลัง"
+        push_line_message(user_id, reply)
         update_user(user_id, usage=int(user["usage"]) + 1)
-        log_usage(user_id, "ใช้สิทธิ์", message_text)
 
     return jsonify({"status": "ok"})
-
-@app.route("/upload-slip", methods=["GET", "POST"])
-def upload_slip():
-    if request.method == "POST":
-        user_id = request.form.get("user_id")
-        user_name = request.form.get("user_name")
-        file = request.files.get("file")
-        if not user_id or not file:
-            return "กรุณากรอกข้อมูลให้ครบ", 400
-        filename = f"slip_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-        os.makedirs("static/slips", exist_ok=True)
-        path = f"static/slips/{filename}"
-        file.save(path)
-        ocr_text = pytesseract.image_to_string(Image.open(path), lang="eng+tha")
-        info = extract_payment_info(ocr_text)
-        amount_paid = int(float(info["amount"])) if info["amount"] else 0
-        add_or_update_user(user_id, user_name, amount_paid, filename)
-        push_line_message(user_id, f"📥 ได้รับสลิปแล้ว เพิ่มสิทธิ์ {amount_paid} ครั้ง ✅")
-        log_usage(user_id, "แนบสลิป", f"OCR: {info}")
-        return render_template("success.html", user_id=user_id)
-    return render_template("upload_form.html")
-
-@app.route("/upload-slip-liff")
-def upload_slip_liff():
-    return render_template("upload_slip_liff.html", liff_id=LIFF_ID)
-
-@app.route("/success")
-def success_page():
-    return render_template("success.html", user_id=request.args.get("user_id", "ไม่ทราบ"))
-
-@app.route("/admin")
-def admin_dashboard():
-    auth = require_basic_auth()
-    if auth: return auth
-    records = users_sheet.get_all_records()
-    return render_template("admin_dashboard.html", users=records)
-
-@app.route("/test-sheet")
-def test_sheet():
-    try:
-        data = users_sheet.get_all_records()
-        return jsonify({"status": "success", "data": data})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
 
 # === EXPORT FOR RENDER ===
 application = app
