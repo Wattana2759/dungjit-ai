@@ -63,42 +63,39 @@ def push_line_message(user_id, text):
     response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
     print("LINE Text Response:", response.status_code, response.text)
 
-def send_invite_link(user_id):
-    share_url = f"{PUBLIC_URL}/shared?user_id={user_id}"
-    flex = {
-        "type": "flex",
-        "altText": "🏱 แชร์บอทรับสิทธิ์",
-        "contents": {
-            "type": "bubble",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {"type": "text", "text": "🏱 แชร์ลิงก์รับสิทธิ์ฟรี 1 ครั้ง", "weight": "bold", "size": "md"},
-                    {"type": "text", "text": "กดปุ่มด้านล่างเพื่อแชร์ลิงก์ให้เพื่อน", "size": "sm", "wrap": True}
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "action": {
-                            "type": "uri",
-                            "label": "📤 แชร์ลิงก์",
-                            "uri": share_url
-                        }
-                    }
-                ]
-            }
+def send_share_to_friend(user_id):
+    line_oa_id = "@duangjitai"
+    share_text = f"\U0001F52E มาดูดวงแม่น ๆ กับหมอดู AI ได้ที่นี่ \u2192 https://line.me/R/oaMessage/{line_oa_id}/?ref={user_id}"
+    encoded_url = f"https://line.me/R/msg/text/?{requests.utils.quote(share_text)}"
+
+    message = {
+        "type": "template",
+        "altText": "\U0001F517 แชร์บอทให้เพื่อนของคุณ",
+        "template": {
+            "type": "buttons",
+            "thumbnailImageUrl": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
+            "title": "แชร์บอทให้เพื่อน",
+            "text": "รับสิทธิ์ฟรี 1 ครั้งเมื่อคุณแชร์ให้เพื่อน!",
+            "actions": [
+                {
+                    "type": "uri",
+                    "label": "\U0001F4E4 แชร์ให้เพื่อน",
+                    "uri": encoded_url
+                }
+            ]
         }
     }
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    body = {"to": user_id, "messages": [flex]}
+
+    headers = {
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "to": user_id,
+        "messages": [message]
+    }
     response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
-    print("LINE Flex Response:", response.status_code, response.text)
+    print("LINE Template Response:", response.status_code, response.text)
 
 # === WEBHOOK ===
 @app.route("/webhook", methods=["POST"])
@@ -115,8 +112,8 @@ def webhook():
         user, _ = get_user(user_id)
 
         if not user or int(user["paid_quota"]) <= int(user["usage"]):
-            push_line_message(user_id, "\ud83d\udccd คุณยังไม่มีสิทธิ์ใช้งาน")
-            send_invite_link(user_id)
+            push_line_message(user_id, "\U0001F4CD คุณยังไม่มีสิทธิ์ใช้งาน")
+            send_share_to_friend(user_id)
             continue
 
         reply = f"คุณถาม: {message_text}\nหมอตอบ: ยังไม่ได้เชื่อม AI จริง"
@@ -124,22 +121,6 @@ def webhook():
         update_user(user_id, usage=int(user["usage"]) + 1)
 
     return jsonify({"status": "ok"})
-
-# === SHARE REWARD ===
-@app.route("/shared")
-def shared_link_clicked():
-    user_id = request.args.get("user_id")
-    if not user_id:
-        return "Missing user_id", 400
-
-    user, row = get_user(user_id)
-    if not user:
-        return "User not found", 404
-
-    current_quota = int(user["paid_quota"])
-    users_sheet.update_cell(row, 4, current_quota + 1)
-    push_line_message(user_id, "🎁 ขอบคุณที่แชร์! คุณได้รับสิทธิ์เพิ่ม 1 ครั้งแล้ว ✅")
-    return "✅ Shared successfully"
 
 application = app
 
