@@ -100,7 +100,7 @@ def send_payment_request(user_id):
             "type": "bubble",
             "hero": {
                 "type": "image",
-                "url": f"{PUBLIC_URL}/static/qr_promptpay.png",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647509/qr_promptpay_rzompe.jpg",
                 "size": "full",
                 "aspectRatio": "1:1",
                 "aspectMode": "cover"
@@ -127,7 +127,7 @@ def send_flex_upload_link(user_id):
             "type": "bubble",
             "hero": {
                 "type": "image",
-                "url": f"{PUBLIC_URL}/static/banner.jpg",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
                 "size": "full",
                 "aspectRatio": "16:9",
                 "aspectMode": "cover"
