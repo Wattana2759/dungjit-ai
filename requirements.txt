@@ -1,8 +1,10 @@
 flask
-requests
-python-dotenv
+gunicorn
+openai==0.28.1
 pytesseract
 Pillow
+python-dotenv
 gspread
 google-auth
-openai==0.28.1
+google-auth-oauthlib
+
