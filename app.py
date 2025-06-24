@@ -98,39 +98,75 @@ def push_line_message(user_id, text):
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
-def send_flex_upload_link(user_id):
+def send_flex_open_bank(user_id):
     flex_message = {
         "type": "flex",
-        "altText": "แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน ดวงจิต AI",
+        "altText": "📌 กรุณาชำระเงินผ่านแอปธนาคาร หรือแนบสลิป",
         "contents": {
             "type": "bubble",
+            "size": "mega",
             "hero": {
                 "type": "image",
-                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
-                "size": "full", "aspectRatio": "16:9", "aspectMode": "cover"
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647509/qr_promptpay_rzompe.jpg",
+                "size": "full",
+                "aspectRatio": "1:1",
+                "aspectMode": "cover"
             },
             "body": {
-                "type": "box", "layout": "vertical",
-                "contents": [{"type": "text", "text": "แนบสลิปเพื่อรับสิทธิ์", "weight": "bold", "size": "md"}]
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "📌 สแกน QR หรือเลือกแอปธนาคารเพื่อชำระ",
+                        "wrap": True,
+                        "weight": "bold",
+                        "gravity": "center",
+                        "size": "md"
+                    }
+                ]
             },
             "footer": {
-                "type": "box", "layout": "vertical",
-                "contents": [{
-                    "type": "button",
-                    "style": "primary",
-                    "action": {
-                        "type": "uri",
-                        "label": "แนบสลิปตอนนี้",
-                        "uri": "https://liff.line.me/" + LIFF_ID
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "action": {
+                            "type": "uri",
+                            "label": "🟣 เปิดแอป SCB Easy",
+                            "uri": "scbeasy://"
+                        }
+                    },
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "action": {
+                            "type": "uri",
+                            "label": "🟢 เปิดแอป K PLUS",
+                            "uri": "kplus://"
+                        }
+                    },
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "action": {
+                            "type": "uri",
+                            "label": "📤 แนบสลิปหลังชำระ",
+                            "uri": f"https://liff.line.me/{LIFF_ID}"
+                        }
                     }
-                }]
+                ]
             }
         }
     }
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
 
-# === หมอดู AI GPT ===
+# === AI ดูดวง GPT ===
 def get_fortune(message):
     prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
     try:
@@ -142,7 +178,7 @@ def get_fortune(message):
     except Exception as e:
         return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
-# === OCR ===
+# === OCR อ่านสลิป ===
 def extract_payment_info(text):
     name = re.search(r"(ชื่อ[^\n\r]+)", text)
     amount = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(บาท|฿)?", text)
@@ -176,7 +212,7 @@ def webhook():
 
         if not user or int(user["paid_quota"]) <= int(user["usage"]):
             push_line_message(user_id, "📌 กรุณาชำระเงินผ่าน PromptPay เพื่อใช้งาน")
-            send_flex_upload_link(user_id)
+            send_flex_open_bank(user_id)
             continue
 
         reply = get_fortune(message_text)
