@@ -1,12 +1,13 @@
 from flask import Flask, render_template, request, redirect
 from datetime import datetime
-import os
+import os, json
 import gspread
 from google.oauth2.service_account import Credentials
 from dotenv import load_dotenv
 from collections import Counter
 from werkzeug.utils import secure_filename
 
+# === LOAD ENV ===
 load_dotenv()
 app = Flask(__name__)
 
@@ -16,26 +17,19 @@ SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS", "Users")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS", "Logs")
 LIFF_ID = os.getenv("LIFF_ID")
 
-# === Google Sheets Setup ===
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-service_account_info = {
-    "type": os.getenv("GOOGLE_TYPE"),
-    "project_id": os.getenv("GOOGLE_PROJECT_ID"),
-    "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
-    "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace("\\n", "\n"),
-    "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
-    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-    "auth_uri": os.getenv("GOOGLE_AUTH_URI"),
-    "token_uri": os.getenv("GOOGLE_TOKEN_URI"),
-    "auth_provider_x509_cert_url": os.getenv("GOOGLE_AUTH_PROVIDER_X509_CERT_URL"),
-    "client_x509_cert_url": os.getenv("GOOGLE_CLIENT_X509_CERT_URL")
-}
+# === Google Sheets Setup via JSON String ===
+service_account_info = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+scope = ["https://www.googleapis.com/auth/spreadsheets"]
 credentials = Credentials.from_service_account_info(service_account_info, scopes=scope)
 client_gsheet = gspread.authorize(credentials)
 sheet_users = client_gsheet.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
 sheet_logs = client_gsheet.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 
-# === Route: LIFF Login Preview ===
+# === Static Path for Uploaded Slips ===
+app.config['UPLOAD_FOLDER'] = "static/slips"
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# === Route: LIFF Login ===
 @app.route("/liff-login")
 def liff_login():
     return render_template("liff_login.html", liff_id=LIFF_ID)
@@ -47,10 +41,7 @@ def review_slips():
     slips = []
     for u in users:
         if "Slip" in u and u["Slip"]:
-            slips.append({
-                "user_id": u["UserID"],
-                "slip": u["Slip"]
-            })
+            slips.append({"user_id": u["UserID"], "slip": u["Slip"]})
     return render_template("review_slips.html", users=slips)
 
 # === Route: Review Slip Action ===
@@ -59,7 +50,6 @@ def review_slip_action():
     user_id = request.form.get("user_id")
     action = request.form.get("action")
     users = sheet_users.get_all_records()
-
     for i, user in enumerate(users):
         if user["UserID"] == user_id:
             row = i + 2
@@ -83,11 +73,7 @@ def admin_dashboard():
     chart_data = sorted(usage_counter.items())
     return render_template("admin_dashboard.html", chart_data=chart_data)
 
-# === Static Path for Uploaded Slips ===
-app.config['UPLOAD_FOLDER'] = "static/slips"
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-# === Route: Upload Slip (for reference only, already exists) ===
+# === Route: Upload Slip (Liff UI) ===
 @app.route("/upload-slip", methods=["GET", "POST"])
 def upload_slip():
     if request.method == "POST":
@@ -98,16 +84,16 @@ def upload_slip():
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(path)
 
-            # บันทึกชื่อไฟล์ลง Google Sheet
             users = sheet_users.get_all_records()
             for i, u in enumerate(users):
                 if u["UserID"] == user_id:
                     row = i + 2
-                    sheet_users.update_cell(row, 5, filename)  # คอลัมน์ Slip
+                    sheet_users.update_cell(row, 5, filename)
                     break
             else:
                 sheet_users.append_row([user_id, datetime.now().isoformat(), 0, "", filename])
             return render_template("success.html", user_id=user_id)
+
     return render_template("upload_slip_liff.html", liff_id=LIFF_ID)
 
 # === Main App Run ===
