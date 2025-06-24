@@ -2,156 +2,95 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>แนบสลิปผ่าน LIFF</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
     body {
-      font-family: 'Prompt', sans-serif;
-      max-width: 100%;
-      margin: 0;
+      font-family: sans-serif;
+      max-width: 420px;
+      margin: 30px auto;
       padding: 20px;
       background: url('https://res.cloudinary.com/dwg28idpf/image/upload/v1750748781/ChatGPT_Image_24_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_14_05_21_doievv.png') no-repeat center center;
       background-size: cover;
+      border-radius: 10px;
       color: white;
-      backdrop-filter: brightness(0.85);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      backdrop-filter: brightness(0.9);
     }
-
-    h2 {
-      text-align: center;
-      font-size: 1.6rem;
-      margin-bottom: 20px;
-    }
-
-    form {
-      background: rgba(0, 0, 0, 0.6);
-      border-radius: 12px;
-      padding: 20px;
-      max-width: 100%;
-    }
-
     label {
-      font-size: 1rem;
-      margin-top: 15px;
       display: block;
+      margin-top: 10px;
     }
-
-    input[type="text"], input[type="file"], button {
+    input, button {
       width: 100%;
-      padding: 14px;
-      margin-top: 8px;
-      border-radius: 8px;
-      border: none;
+      padding: 12px;
+      margin-top: 5px;
       font-size: 1rem;
+      border: none;
+      border-radius: 5px;
     }
-
-    input[type="text"], input[type="file"] {
-      background-color: white;
-      color: black;
-    }
-
-    button {
-      background-color: #00c853;
-      color: white;
-      font-weight: bold;
-      margin-top: 20px;
-      font-size: 1.2rem;
-    }
-
     img#preview {
       display: none;
       max-width: 100%;
-      margin-top: 15px;
-      border-radius: 10px;
-      box-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+      margin-top: 10px;
+      border-radius: 8px;
     }
-
     .result {
       background: rgba(0, 255, 0, 0.2);
-      padding: 14px;
+      padding: 10px;
       margin-top: 20px;
-      border-radius: 10px;
+      border-radius: 8px;
       display: none;
-      color: white;
-      text-align: center;
-      font-size: 1.1rem;
+      color: #fff;
     }
   </style>
 </head>
 <body>
   <h2>🔮 แนบสลิปเพื่อเปิดสิทธิ์ดูดวง</h2>
-  <form id="slipForm">
+  <form id="slipForm" action="/upload-slip" method="POST" enctype="multipart/form-data">
     <input type="hidden" name="user_id" id="user_id">
-    
-    <label for="user_name">ชื่อของคุณ:</label>
+    <label>ชื่อของคุณ:</label>
     <input type="text" name="user_name" id="user_name" required>
 
-    <label for="file">แนบไฟล์สลิป:</label>
+    <label>แนบไฟล์สลิป:</label>
     <input type="file" name="file" id="file" accept="image/*" required>
-
     <img id="preview" src="#" alt="Preview">
 
-    <button type="submit">✅ ส่งสลิป</button>
+    <button type="submit" id="submitBtn">✅ ส่งสลิป</button>
   </form>
 
   <div class="result" id="resultBox">
-    ✅ ส่งสลิปสำเร็จ! เพิ่มสิทธิ์ <span id="addedQuota"></span> ครั้ง 🎉
+    ✅ ส่งสลิปสำเร็จแล้ว! ระบบจะส่งข้อความแจ้งเตือนผ่าน LINE 🎉
   </div>
 
   <script>
-    // ===== LIFF Init =====
     liff.init({ liffId: "{{ liff_id }}" })
       .then(() => liff.getProfile())
       .then(profile => {
         document.getElementById("user_id").value = profile.userId;
         document.getElementById("user_name").value = profile.displayName;
-      })
-      .catch(err => alert("LIFF error: " + err.message));
+      });
 
-    // ===== Preview Image =====
     document.getElementById("file").addEventListener("change", function () {
-      const file = this.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function (e) {
-          const img = document.getElementById("preview");
-          img.src = e.target.result;
-          img.style.display = "block";
-        };
-        reader.readAsDataURL(file);
-      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = document.getElementById("preview");
+        img.src = e.target.result;
+        img.style.display = "block";
+      };
+      reader.readAsDataURL(this.files[0]);
     });
 
-    // ===== Submit Form =====
-    document.getElementById("slipForm").addEventListener("submit", function (e) {
-      e.preventDefault();
-      const form = document.getElementById("slipForm");
-      const formData = new FormData(form);
-      fetch("/upload-slip", {
-        method: "POST",
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          document.getElementById("addedQuota").textContent = data.amount_paid;
-          document.getElementById("resultBox").style.display = "block";
-          form.reset();
-          document.getElementById("preview").style.display = "none";
-        } else {
-          alert("❌ ส่งไม่สำเร็จ: " + (data.message || "เกิดข้อผิดพลาด"));
-        }
-      })
-      .catch(err => alert("❌ Error: " + err.message));
+    document.getElementById("slipForm").addEventListener("submit", function () {
+      document.getElementById("submitBtn").disabled = true;
+      document.getElementById("submitBtn").textContent = "⏳ กำลังอัปโหลด...";
     });
+
+    // หากต้องการให้แสดงผลสำเร็จทันทีโดยไม่ redirect:
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("success") === "1") {
+      document.getElementById("resultBox").style.display = "block";
+      document.getElementById("slipForm").style.display = "none";
+    }
   </script>
 </body>
 </html>

@@ -6,7 +6,7 @@
   <style>
     body {
       font-family: sans-serif;
-      max-width: 400px;
+      max-width: 420px;
       margin: 30px auto;
       padding: 20px;
       background: url('https://res.cloudinary.com/dwg28idpf/image/upload/v1750748781/ChatGPT_Image_24_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_14_05_21_doievv.png') no-repeat center center;
@@ -17,7 +17,7 @@
       text-align: center;
     }
     .box {
-      background: rgba(0, 0, 0, 0.4);
+      background: rgba(0, 0, 0, 0.5);
       padding: 20px;
       border-radius: 12px;
     }
@@ -28,6 +28,19 @@
       font-size: 1rem;
       margin-top: 10px;
     }
+    a.button {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 20px;
+      background: #00c300;
+      color: white;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    a.button:hover {
+      background: #00a000;
+    }
   </style>
 </head>
 <body>
@@ -35,6 +48,8 @@
     <h2>✅ แนบสลิปสำเร็จ</h2>
     <p>ขอบคุณที่สนับสนุนบริการของเรา</p>
     <p>LINE ID: {{ user_id }}</p>
+    <p>ระบบเพิ่มสิทธิ์ให้คุณแล้วจำนวน <strong>{{ added_quota }}</strong> ครั้ง 🎉</p>
+    <a class="button" href="https://line.me/R/oaMessage/@duangjitai">💬 กลับไปแชตกับดวงจิต AI</a>
   </div>
 </body>
 </html>
