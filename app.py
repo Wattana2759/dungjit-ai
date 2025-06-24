@@ -25,7 +25,7 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
-openai.api_key = OPENAI_API_KEY  # ✅ ใช้ openai==0.28.1
+openai.api_key = OPENAI_API_KEY  # ✅ สำหรับ openai==0.28.1
 
 # === GOOGLE SHEETS ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -185,9 +185,13 @@ def home():
 def webhook():
     data = request.json
     for event in data.get("events", []):
+        # ✅ ป้องกัน usage เพิ่มจาก event ที่ไม่ใช่ข้อความ
+        if event["type"] != "message" or event["message"]["type"] != "text":
+            continue
+
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
-        message_text = event.get("message", {}).get("text", "")
+        message_text = event["message"]["text"]
 
         user, _ = get_user(user_id)
         if message_text.strip().lower() == "/ดูสิทธิ์":
