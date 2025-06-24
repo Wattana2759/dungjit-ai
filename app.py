@@ -70,7 +70,8 @@ def add_or_update_user(user_id, name, added_quota, ref):
 def push_line_message(user_id, text):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
+    response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
+    print("LINE Text Response:", response.status_code, response.text)
 
 def send_invite_link(user_id):
     line_oa_id = "@duangjitai"
@@ -108,7 +109,8 @@ def send_invite_link(user_id):
     }
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     body = {"to": user_id, "messages": [flex]}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
+    response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
+    print("LINE Flex Response:", response.status_code, response.text)
 
 # === WEBHOOK ===
 @app.route("/webhook", methods=["POST"])
@@ -118,7 +120,6 @@ def webhook():
         event_type = event["type"]
         user_id = event["source"]["userId"]
 
-        # กรณี follow (เพิ่งแอดเพื่อน)
         if event_type == "follow":
             referrer_id = request.args.get("ref", "")
             if referrer_id and referrer_id != user_id:
@@ -126,9 +127,9 @@ def webhook():
                 if ref_user:
                     new_quota = int(ref_user["paid_quota"]) + 5
                     users_sheet.update_cell(ref_row, 4, new_quota)
-                    push_line_message(referrer_id, "🎉 เพื่อนของคุณเข้าร่วมแล้ว! รับสิทธิ์เพิ่ม 5 ครั้ง ✔️")
+                    push_line_message(referrer_id, "\ud83c\udf89 เพื่อนของคุณเข้าร่วมแล้ว! รับสิทธิ์เพิ่ม 5 ครั้ง ✅")
             add_or_update_user(user_id, "New User", 0, "ref")
-            push_line_message(user_id, "ยินดีต้อนรับ! แชร์บอทให้เพื่อน แล้วคุณจะได้บัญชาได้ฟรี 5 ครั้ง")
+            push_line_message(user_id, "ยินดีต้อนรับ! แชร์บอทให้เพื่อน แล้วคุณจะได้รับสิทธิ์ใช้ฟรี 5 ครั้ง")
             continue
 
         if event_type != "message" or event["message"]["type"] != "text":
@@ -139,16 +140,15 @@ def webhook():
         user, _ = get_user(user_id)
 
         if not user or int(user["paid_quota"]) <= int(user["usage"]):
-            push_line_message(user_id, "📍 คุณยังไม่มีสิทธิ์ใช้งาน")
+            push_line_message(user_id, "📌 คุณยังไม่มีสิทธิ์ใช้งาน")
             send_invite_link(user_id)
             continue
 
-        reply = f"คุณถึง: {message_text} \nฟังได้ กำลัง"
+        reply = f"คุณถาม: {message_text}\nหมอตอบ: ยังไม่ได้เชื่อม AI จริง"
         push_line_message(user_id, reply)
         update_user(user_id, usage=int(user["usage"]) + 1)
 
     return jsonify({"status": "ok"})
 
-# === EXPORT FOR RENDER ===
 application = app
 
