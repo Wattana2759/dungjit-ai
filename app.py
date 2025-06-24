@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, Response
+from flask import Flask, request, jsonify, render_template, Response, redirect
 import os, requests, re
 from datetime import datetime
 from dotenv import load_dotenv
@@ -64,36 +64,26 @@ def push_line_message(user_id, text):
     print("LINE Text Response:", response.status_code, response.text)
 
 def send_share_to_friend(user_id):
-    line_oa_id = "@duangjitai"
-    share_text = f"\U0001F52E มาดูดวงแม่น ๆ กับหมอดู AI ได้ที่นี่ \u2192 https://line.me/R/oaMessage/{line_oa_id}/?ref={user_id}"
-    encoded_url = f"https://line.me/R/msg/text/?{requests.utils.quote(share_text)}"
-
+    share_url = f"{PUBLIC_URL}/shared?user_id={user_id}&redirect=1"
     message = {
         "type": "template",
-        "altText": "\U0001F517 แชร์บอทให้เพื่อนของคุณ",
+        "altText": "\U0001F517 แชร์บอทเพื่อรับสิทธิ์",
         "template": {
             "type": "buttons",
             "thumbnailImageUrl": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
             "title": "แชร์บอทให้เพื่อน",
-            "text": "รับสิทธิ์ฟรี 1 ครั้งเมื่อคุณแชร์ให้เพื่อน!",
+            "text": "กดปุ่มเพื่อแชร์ พร้อมรับสิทธิ์ฟรี 1 ครั้งทันที!",
             "actions": [
                 {
                     "type": "uri",
-                    "label": "\U0001F4E4 แชร์ให้เพื่อน",
-                    "uri": encoded_url
+                    "label": "\U0001F4E4 แชร์และรับสิทธิ์",
+                    "uri": share_url
                 }
             ]
         }
     }
-
-    headers = {
-        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    body = {
-        "to": user_id,
-        "messages": [message]
-    }
+    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    body = {"to": user_id, "messages": [message]}
     response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
     print("LINE Template Response:", response.status_code, response.text)
 
@@ -121,6 +111,31 @@ def webhook():
         update_user(user_id, usage=int(user["usage"]) + 1)
 
     return jsonify({"status": "ok"})
+
+# === SHARE + REDIRECT ===
+@app.route("/shared")
+def shared_link_clicked():
+    user_id = request.args.get("user_id")
+    do_redirect = request.args.get("redirect") == "1"
+
+    if not user_id:
+        return "Missing user_id", 400
+
+    user, row = get_user(user_id)
+    if not user:
+        return "User not found", 404
+
+    current_quota = int(user["paid_quota"])
+    users_sheet.update_cell(row, 4, current_quota + 1)
+    push_line_message(user_id, "\U0001F381 คุณได้รับสิทธิ์เพิ่ม 1 ครั้งแล้ว ขอบคุณที่แชร์บอท \U0001F64F")
+
+    if do_redirect:
+        line_oa_id = "@duangjitai"
+        share_text = f"\U0001F52E มาดูดวงแม่น ๆ กับหมอดู AI ได้ที่นี่ \u2192 https://line.me/R/oaMessage/{line_oa_id}/?ref={user_id}"
+        encoded_url = f"https://line.me/R/msg/text/?{requests.utils.quote(share_text)}"
+        return f"""<html><head><meta http-equiv=\"refresh\" content=\"0; url={encoded_url}\" /></head><body>Redirecting...</body></html>"""
+
+    return "✅ Shared successfully"
 
 application = app
 
