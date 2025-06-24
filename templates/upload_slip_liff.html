@@ -1,189 +1,25 @@
 <!DOCTYPE html>
-<html lang="th">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>แนบสลิป - ดวงจิต AI</title>
+  <title>แนบสลิป (LIFF)</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <meta name="theme-color" content="#06c755" />
-  <style>
-    :root {
-      --bg: #f2f2f2;
-      --fg: #333;
-      --card: #fff;
-      --border: #ccc;
-      --btn: #06c755;
-      --btn-hover: #04a94c;
-      --back-btn: #007bff;
-      --back-btn-hover: #0056b3;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #121212;
-        --fg: #eee;
-        --card: #1e1e1e;
-        --border: #333;
-        --btn: #2ecc71;
-        --btn-hover: #27ae60;
-        --back-btn: #2980b9;
-        --back-btn-hover: #1c5f8c;
-      }
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: var(--bg);
-      margin: 0;
-      padding: 20px;
-      color: var(--fg);
-    }
-
-    .container {
-      max-width: 420px;
-      background: var(--card);
-      padding: 24px;
-      border-radius: 12px;
-      margin: auto;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      text-align: center;
-    }
-
-    h2 {
-      margin-top: 0;
-    }
-
-    label {
-      display: block;
-      margin: 16px 0 8px;
-      font-weight: bold;
-    }
-
-    input[type="file"], button {
-      width: 100%;
-      padding: 12px;
-      font-size: 1em;
-      border-radius: 8px;
-      box-sizing: border-box;
-    }
-
-    button {
-      background-color: var(--btn);
-      color: white;
-      border: none;
-      margin-top: 16px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background-color: var(--btn-hover);
-    }
-
-    .back-btn {
-      margin-top: 20px;
-      display: inline-block;
-      background: var(--back-btn);
-      color: white;
-      padding: 10px 20px;
-      text-decoration: none;
-      border-radius: 8px;
-    }
-
-    .back-btn:hover {
-      background-color: var(--back-btn-hover);
-    }
-
-    #preview {
-      margin-top: 16px;
-      max-width: 100%;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      display: none;
-    }
-
-    #status {
-      margin-top: 10px;
-      font-size: 0.9em;
-    }
-  </style>
 </head>
 <body>
-  <div class="container">
-    <h2>แนบสลิปเพื่อเปิดสิทธิ์ใช้งาน</h2>
-    <form id="slipForm" action="/upload-slip" method="POST" enctype="multipart/form-data">
-      <input type="hidden" name="user_id" id="user_id">
-      <input type="hidden" name="user_name" id="user_name">
-      <label for="file">เลือกไฟล์สลิป</label>
-      <input type="file" name="file" id="file" accept="image/*" required>
-      <img id="preview" src="#" alt="Preview Slip">
-      <button type="submit" id="submitBtn">ส่งสลิป</button>
-    </form>
-    <div id="status"></div>
-    <a class="back-btn" href="javascript:liff.closeWindow();">กลับไปยัง LINE</a>
-  </div>
-
+  <h2>แนบสลิปผ่าน LIFF</h2>
+  <form id="slipForm" method="POST" enctype="multipart/form-data" action="/upload-slip">
+    <input type="hidden" name="user_id" id="user_id">
+    <label>ชื่อของคุณ:</label><br>
+    <input type="text" name="user_name" required><br>
+    <label>แนบไฟล์สลิป:</label><br>
+    <input type="file" name="file" accept="image/*" required><br><br>
+    <button type="submit">ส่งสลิป</button>
+  </form>
   <script>
-    let profileReady = false;
-
-    async function init() {
-      try {
-        const liffId = "{{ liff_id }}";
-        await liff.init({ liffId });
-        if (!liff.isLoggedIn()) {
-          liff.login();
-        } else {
-          const profile = await liff.getProfile();
-          document.getElementById("user_id").value = profile.userId;
-          document.getElementById("user_name").value = profile.displayName;
-          profileReady = true;
-        }
-      } catch (err) {
-        alert("❌ เกิดข้อผิดพลาดในการโหลด LIFF: " + err);
-      }
-    }
-
-    document.getElementById("file").addEventListener("change", function () {
-      const file = this.files[0];
-      const preview = document.getElementById("preview");
-      if (file && file.type.startsWith("image/")) {
-        const reader = new FileReader();
-        reader.onload = function (e) {
-          preview.src = e.target.result;
-          preview.style.display = "block";
-        };
-        reader.readAsDataURL(file);
-      } else {
-        preview.style.display = "none";
-      }
+    liff.init({ liffId: "{{ liff_id }}" }).then(() => {
+      liff.getProfile().then(profile => {
+        document.getElementById("user_id").value = profile.userId;
+      });
     });
-
-    document.getElementById("slipForm").addEventListener("submit", function (e) {
-      const file = document.getElementById("file").files[0];
-      const status = document.getElementById("status");
-
-      if (!profileReady) {
-        alert("โปรไฟล์ผู้ใช้ยังไม่โหลด กรุณารอสักครู่...");
-        e.preventDefault();
-        return;
-      }
-
-      if (!file || !file.type.startsWith("image/")) {
-        alert("กรุณาเลือกเฉพาะไฟล์รูปภาพเท่านั้น");
-        e.preventDefault();
-        return;
-      }
-
-      if (file.size > 5 * 1024 * 1024) {
-        alert("ขนาดไฟล์ต้องไม่เกิน 5MB");
-        e.preventDefault();
-        return;
-      }
-
-      document.getElementById("submitBtn").disabled = true;
-      status.innerText = "📤 กำลังส่งสลิป...";
-    });
-
-    init();
   </script>
 </body>
 </html>

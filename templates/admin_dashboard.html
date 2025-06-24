@@ -1,27 +1,28 @@
 <!DOCTYPE html>
-<html lang="th">
-<head>
-  <meta charset="UTF-8">
-  <title>สถิติการใช้งาน</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
+<html>
+<head><title>แดชบอร์ดผู้ดูแล</title></head>
 <body>
-  <h2>กราฟการใช้งานดวงจิต AI (รายวัน)</h2>
-  <canvas id="usageChart" width="600" height="300"></canvas>
-  <script>
-    const ctx = document.getElementById('usageChart');
-    const chart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: {{ chart_data | map(attribute=0) | list }},
-        datasets: [{
-          label: 'จำนวนครั้งที่ใช้',
-          data: {{ chart_data | map(attribute=1) | list }},
-          backgroundColor: 'rgba(75, 192, 192, 0.6)'
-        }]
-      }
-    });
-  </script>
+  <h2>แดชบอร์ดผู้ดูแล</h2>
+  <table border="1">
+    <tr>
+      <th>user_id</th>
+      <th>name</th>
+      <th>usage</th>
+      <th>paid_quota</th>
+      <th>slip_file</th>
+      <th>updated_at</th>
+    </tr>
+    {% for user in users %}
+    <tr>
+      <td>{{ user['user_id'] }}</td>
+      <td>{{ user['name'] }}</td>
+      <td>{{ user['usage'] }}</td>
+      <td>{{ user['paid_quota'] }}</td>
+      <td>{{ user['slip_file'] }}</td>
+      <td>{{ user['updated_at'] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
 </body>
 </html>
 

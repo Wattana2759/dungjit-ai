@@ -1,78 +1,17 @@
 <!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <title>แนบสลิปเพื่อขอสิทธิ์</title>
-    <style>
-        body {
-            font-family: 'Prompt', sans-serif;
-            background: linear-gradient(to right, #fdfbfb, #ebedee);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        .form-box {
-            background-color: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 400px;
-        }
-        h2 {
-            text-align: center;
-            color: #333;
-        }
-        label {
-            display: block;
-            margin-top: 1rem;
-            color: #555;
-        }
-        input[type="text"],
-        input[type="file"] {
-            width: 100%;
-            padding: 0.5rem;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            margin-top: 0.5rem;
-        }
-        button {
-            width: 100%;
-            margin-top: 1.5rem;
-            padding: 0.7rem;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #218838;
-        }
-        footer {
-            margin-top: 1rem;
-            font-size: 0.8rem;
-            text-align: center;
-            color: #888;
-        }
-    </style>
-</head>
+<html>
+<head><title>แนบสลิป</title></head>
 <body>
-    <form class="form-box" method="POST" enctype="multipart/form-data">
-        <h2>📤 แนบสลิปเพื่อขอสิทธิ์</h2>
-        <label for="user_id">LINE User ID:</label>
-        <input type="text" name="user_id" placeholder="กรอก LINE ID" required>
-
-        <label for="file">อัปโหลดสลิป (.jpg):</label>
-        <input type="file" name="file" accept="image/*" required>
-
-        <button type="submit">ส่งสลิป</button>
-        <footer>
-            ระบบหมอดู AI - ดวงจิต
-        </footer>
-    </form>
+  <h2>แนบสลิป</h2>
+  <form method="POST" enctype="multipart/form-data">
+    <label>LINE User ID:</label><br>
+    <input type="text" name="user_id" required><br>
+    <label>ชื่อผู้ใช้:</label><br>
+    <input type="text" name="user_name" required><br>
+    <label>ไฟล์สลิป:</label><br>
+    <input type="file" name="file" accept="image/*" required><br><br>
+    <button type="submit">อัปโหลด</button>
+  </form>
 </body>
 </html>
 

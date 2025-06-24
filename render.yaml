@@ -1,33 +1,46 @@
 services:
   - type: web
     name: dungjit-ai
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    plan: free
+    env: python
+    buildCommand: ""
+    startCommand: gunicorn app:application
     envVars:
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: /app/duangjit-ai-808449ecaf0c.json
-        type: secretFile
-
-      # Secret variables ที่ตั้งจาก Dashboard หรือ Render CLI (sync: false)
       - key: LINE_ACCESS_TOKEN
         sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: GOOGLE_SHEET_ID
         sync: false
-
-      # ค่าอื่น ๆ ที่สามารถ sync ได้
       - key: SHEET_NAME_USERS
-        value: Users
+        sync: false
       - key: SHEET_NAME_LOGS
-        value: Logs
+        sync: false
       - key: PUBLIC_URL
-        value: https://dungjit-ai.onrender.com
-      - key: LIFF_ID
-        value: 2007541798-GneVaZEy
+        sync: false
       - key: ADMIN_USER
         value: admin
       - key: ADMIN_PASS
-        value: Wattana@2759
+        value: 1234
+      - key: LIFF_ID
+        sync: false
+      - key: GOOGLE_TYPE
+        sync: false
+      - key: GOOGLE_PROJECT_ID
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY_ID
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_AUTH_URI
+        sync: false
+      - key: GOOGLE_TOKEN_URI
+        sync: false
+      - key: GOOGLE_AUTH_PROVIDER_X509_CERT_URL
+        sync: false
+      - key: GOOGLE_CLIENT_X509_CERT_URL
+        sync: false
 
