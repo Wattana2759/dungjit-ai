@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>ส่งสลิปสำเร็จ</title>
+    <title>{{ title or "ส่งสลิปสำเร็จ" }}</title>
     <style>
         body {
             font-family: 'Prompt', sans-serif;
@@ -43,10 +43,11 @@
 </head>
 <body>
     <div class="message-box">
-        <h1>✅ ส่งสลิปสำเร็จ!</h1>
-        <p>สลิปของคุณถูกส่งเรียบร้อยแล้ว</p>
+        <h1>{{ message or "✅ ส่งสลิปสำเร็จ!" }}</h1>
+        {% if user_id %}
         <p>LINE ID: {{ user_id }}</p>
-        <a href="/upload-slip">แนบสลิปเพิ่ม</a>
+        {% endif %}
+        <a href="{{ back_link or '/' }}">กลับ</a>
     </div>
 </body>
 </html>
