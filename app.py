@@ -8,7 +8,7 @@ import pytesseract
 import gspread
 from google.oauth2.service_account import Credentials
 import re
-from openai import OpenAI
+import openai
 
 # === LOAD ENV ===
 load_dotenv()
@@ -25,7 +25,7 @@ PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+openai.api_key = OPENAI_API_KEY  # ✅ ใช้รูปแบบของ openai==0.28.1
 
 # === GOOGLE SHEETS ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -159,13 +159,13 @@ def send_flex_upload_link(user_id):
 def get_fortune(message):
     prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
     try:
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
         )
-        return response.choices[0].message.content.strip()
-    except Exception:
-        return "ขออภัย ระบบหมอดู AI ขัดข้องชั่วคราว"
+        return response.choices[0].message["content"].strip()
+    except Exception as e:
+        return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
 # === OCR ตรวจสลิป ===
 def extract_payment_info(text):
