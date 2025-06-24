@@ -146,7 +146,7 @@ def send_flex_upload_link(user_id):
                     "action": {
                         "type": "uri",
                         "label": "แนบสลิปตอนนี้",
-                        "uri": f"{PUBLIC_URL}/upload-slip-liff"
+                        "uri": "https://liff.line.me/2007541798-GneVaZEy"
                     }
                 }]
             }
