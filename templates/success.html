@@ -1,10 +1,41 @@
 <!DOCTYPE html>
-<html>
-<head><title>สำเร็จ</title></head>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>แนบสลิปสำเร็จ</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 400px;
+      margin: 30px auto;
+      padding: 20px;
+      background: url('https://res.cloudinary.com/dwg28idpf/image/upload/v1750748781/ChatGPT_Image_24_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_14_05_21_doievv.png') no-repeat center center;
+      background-size: cover;
+      border-radius: 10px;
+      color: white;
+      backdrop-filter: brightness(0.9);
+      text-align: center;
+    }
+    .box {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 20px;
+      border-radius: 12px;
+    }
+    h2 {
+      font-size: 1.5rem;
+    }
+    p {
+      font-size: 1rem;
+      margin-top: 10px;
+    }
+  </style>
+</head>
 <body>
-  <h2>✅ แนบสลิปสำเร็จ</h2>
-  <p>ขอบคุณที่สนับสนุนบริการของเรา</p>
-  <p>LINE ID: {{ user_id }}</p>
+  <div class="box">
+    <h2>✅ แนบสลิปสำเร็จ</h2>
+    <p>ขอบคุณที่สนับสนุนบริการของเรา</p>
+    <p>LINE ID: {{ user_id }}</p>
+  </div>
 </body>
 </html>
 

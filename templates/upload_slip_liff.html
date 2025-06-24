@@ -2,45 +2,87 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>แนบสลิปผ่าน LIFF</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: sans-serif;
-      max-width: 400px;
-      margin: 30px auto;
+      font-family: 'Prompt', sans-serif;
+      max-width: 100%;
+      margin: 0;
       padding: 20px;
       background: url('https://res.cloudinary.com/dwg28idpf/image/upload/v1750748781/ChatGPT_Image_24_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_14_05_21_doievv.png') no-repeat center center;
       background-size: cover;
-      border-radius: 10px;
       color: white;
-      backdrop-filter: brightness(0.9);
+      backdrop-filter: brightness(0.85);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
+
+    h2 {
+      text-align: center;
+      font-size: 1.6rem;
+      margin-bottom: 20px;
+    }
+
+    form {
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 100%;
+    }
+
     label {
+      font-size: 1rem;
+      margin-top: 15px;
       display: block;
-      margin-top: 10px;
     }
-    input, button {
+
+    input[type="text"], input[type="file"], button {
       width: 100%;
-      padding: 10px;
-      margin-top: 5px;
+      padding: 14px;
+      margin-top: 8px;
+      border-radius: 8px;
       border: none;
-      border-radius: 5px;
+      font-size: 1rem;
     }
+
+    input[type="text"], input[type="file"] {
+      background-color: white;
+      color: black;
+    }
+
+    button {
+      background-color: #00c853;
+      color: white;
+      font-weight: bold;
+      margin-top: 20px;
+      font-size: 1.2rem;
+    }
+
     img#preview {
       display: none;
       max-width: 100%;
-      margin-top: 10px;
-      border-radius: 8px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.5);
+      margin-top: 15px;
+      border-radius: 10px;
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
     }
+
     .result {
       background: rgba(0, 255, 0, 0.2);
-      padding: 10px;
+      padding: 14px;
       margin-top: 20px;
-      border-radius: 8px;
+      border-radius: 10px;
       display: none;
-      color: #fff;
+      color: white;
+      text-align: center;
+      font-size: 1.1rem;
     }
   </style>
 </head>
@@ -48,11 +90,13 @@
   <h2>🔮 แนบสลิปเพื่อเปิดสิทธิ์ดูดวง</h2>
   <form id="slipForm">
     <input type="hidden" name="user_id" id="user_id">
-    <label>ชื่อของคุณ:</label>
+    
+    <label for="user_name">ชื่อของคุณ:</label>
     <input type="text" name="user_name" id="user_name" required>
 
-    <label>แนบไฟล์สลิป:</label>
+    <label for="file">แนบไฟล์สลิป:</label>
     <input type="file" name="file" id="file" accept="image/*" required>
+
     <img id="preview" src="#" alt="Preview">
 
     <button type="submit">✅ ส่งสลิป</button>

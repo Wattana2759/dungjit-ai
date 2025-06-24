@@ -1,27 +1,81 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <title>Review Slips</title>
+  <meta charset="UTF-8">
+  <title>ตรวจสอบสลิป</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 1000px;
+      margin: 30px auto;
+      padding: 20px;
+      background: url('https://res.cloudinary.com/dwg28idpf/image/upload/v1750748781/ChatGPT_Image_24_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_14_05_21_doievv.png') no-repeat center center;
+      background-size: cover;
+      border-radius: 10px;
+      color: white;
+      backdrop-filter: brightness(0.9);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 12px;
+      text-align: center;
+    }
+    th {
+      background-color: rgba(0, 0, 0, 0.6);
+    }
+    img {
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+    }
+    button {
+      padding: 8px 12px;
+      margin: 2px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button[name="action"][value="approve"] {
+      background-color: #28a745;
+      color: white;
+    }
+    button[name="action"][value="reject"] {
+      background-color: #dc3545;
+      color: white;
+    }
+    h2 {
+      text-align: center;
+      color: white;
+      background-color: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 10px;
+    }
+  </style>
 </head>
 <body>
-    <h2>ตรวจสอบสลิป</h2>
-    <table border="1">
-        <tr><th>User ID</th><th>Slip</th><th>Action</th></tr>
-        {% for user in users %}
-        <tr>
-            <td>{{ user['user_id'] }}</td>
-            <td><img src="/static/slips/{{ user['slip'] }}" width="150"></td>
-            <td>
-                <form action="/review-slip-action" method="post">
-                    <input type="hidden" name="user_id" value="{{ user['user_id'] }}">
-                    <button name="action" value="approve">✅ อนุมัติ</button>
-                    <button name="action" value="reject">❌ ปฏิเสธ</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
+  <h2>🔍 ตรวจสอบสลิปผู้ใช้งาน</h2>
+  <table>
+    <tr><th>User ID</th><th>สลิป</th><th>การจัดการ</th></tr>
+    {% for user in users %}
+    <tr>
+      <td>{{ user['user_id'] }}</td>
+      <td><img src="/static/slips/{{ user['slip'] }}" width="150"></td>
+      <td>
+        <form action="/review-slip-action" method="post">
+          <input type="hidden" name="user_id" value="{{ user['user_id'] }}">
+          <button name="action" value="approve">✅ อนุมัติ</button>
+          <button name="action" value="reject">❌ ปฏิเสธ</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
 </body>
 </html>
 
