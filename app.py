@@ -1,26 +1,22 @@
-from flask import Flask, request, jsonify, render_template, Response
-import os
-import requests
+# ✅ app.py: พร้อมระบบแชร์เพื่อน ป้องกันการโกง + LIFF ดึง user_id อัตโนมัติ
+from flask import Flask, request, jsonify, render_template, redirect
+import os, requests, re, threading
 from datetime import datetime
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
 import openai
-import threading
-import re
 
 # === LOAD ENV ===
 load_dotenv()
 app = Flask(__name__)
 
-# === ENV & CONFIG ===
+# === CONFIG ===
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
-SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
-
 openai.api_key = OPENAI_API_KEY
 
 # === GOOGLE SHEETS SETUP ===
@@ -41,7 +37,7 @@ creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPE
 gc = gspread.authorize(creds)
 logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 
-# === LINE MESSAGE ===
+# === LINE ===
 def send_line_message(reply_token, text):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
@@ -52,13 +48,9 @@ def push_line_message(user_id, text):
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
-# === ภาษาไทยเท่านั้น ===
-def is_thai(text):
-    return bool(re.search(r'[\u0E00-\u0E7F]', text))
-
 # === หมอดู AI ===
 def get_fortune(message):
-    prompt = f"คุณคือหมอดูไทยโบราณที่ตอบเรื่องดวง ความรัก การเงิน ความฝัน อย่างสุภาพ\n\nถาม: {message}\nตอบ:"
+    prompt = f"คุณคือหมอดูไทยโบราณ\n\nถาม: {message}\nตอบ:"
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o",
@@ -66,50 +58,32 @@ def get_fortune(message):
         )
         return response.choices[0].message["content"].strip()
     except Exception as e:
-        return f"ขออภัย ระบบขัดข้อง: {str(e)}"
+        return f"เกิดข้อผิดพลาด: {str(e)}"
 
-# === LOG และให้สิทธิ์เมื่อครบ 5 ครั้ง ===
-def log_usage(user_id, action, detail):
-    now = datetime.now().isoformat()
-    logs_sheet.append_row([now, user_id, action, detail])
-
-    logs = logs_sheet.get_all_records()
-    count = sum(1 for row in logs if row["user_id"] == user_id and row["action"] == "ใช้งานฟรี")
-    if count > 0 and count % 5 == 0:
-        send_invite_friend_flex(user_id, count)
-
-# === แชร์ Flex Message ===
+# === ระบบแชร์ ===
 def send_invite_friend_flex(user_id, count):
-    flex_message = {
+    flex = {
         "type": "flex",
-        "altText": f"🎉 ครบ {count} ครั้ง! แชร์บอทนี้ให้เพื่อนเลย",
+        "altText": "🎉 ครบ 5 ครั้ง แชร์เพื่อรับสิทธิ์เพิ่ม!",
         "contents": {
             "type": "bubble",
             "hero": {
                 "type": "image",
                 "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750824745/ChatGPT_Image_25_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_11_10_18_mr9phf.png",
-                "size": "full",
-                "aspectRatio": "16:9",
-                "aspectMode": "cover"
+                "size": "full", "aspectMode": "cover"
             },
             "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {"type": "text", "text": f"คุณใช้ครบ {count} ครั้งแล้ว!", "weight": "bold", "size": "xl"},
-                    {"type": "text", "text": "แชร์ให้เพื่อนแล้วรับสิทธิ์ใช้งานฟรีเพิ่ม 🎁", "size": "sm", "wrap": True}
+                "type": "box", "layout": "vertical", "contents": [
+                    {"type": "text", "text": "ครบ 5 ครั้งแล้ว!", "weight": "bold", "size": "xl"},
+                    {"type": "text", "text": "แชร์บอทนี้ให้เพื่อน รับสิทธิ์ใช้งานฟรีเพิ่ม!", "size": "sm"}
                 ]
             },
             "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
+                "type": "box", "layout": "vertical", "contents": [
                     {
-                        "type": "button",
-                        "style": "primary",
+                        "type": "button", "style": "primary",
                         "action": {
-                            "type": "uri",
-                            "label": "📎 แชร์ให้เพื่อน",
+                            "type": "uri", "label": "แชร์ให้เพื่อน",
                             "uri": f"{PUBLIC_URL}/shared?referrer={user_id}"
                         }
                     }
@@ -117,51 +91,69 @@ def send_invite_friend_flex(user_id, count):
             }
         }
     }
-
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex]})
 
-# === ดำเนินการทำนายใน thread ===
-def handle_fortune(user_id, message_text):
-    reply = get_fortune(message_text)
-    push_line_message(user_id, reply)
-    log_usage(user_id, "ใช้งานฟรี", message_text)
+def has_shared_before(user_id, referrer_id):
+    logs = logs_sheet.get_all_records()
+    for row in logs:
+        if row.get("user_id") == user_id and row.get("referrer_id") == referrer_id:
+            return True
+    return False
 
-# === แชร์ลิงก์สำเร็จ รับสิทธิ์ ===
-@app.route("/shared")
-def shared():
-    referrer_id = request.args.get("referrer")
-    if not referrer_id:
-        return "ลิงก์ไม่ถูกต้อง"
+def log_usage(user_id, action, detail, referrer_id=""):
     now = datetime.now().isoformat()
-    logs_sheet.append_row([now, referrer_id, "ได้สิทธิ์จากการแชร์", "referral"])
-    return "✅ ระบบรับทราบว่าคุณแชร์แล้ว! ได้รับสิทธิ์เพิ่ม 1 ครั้ง"
+    logs_sheet.append_row([now, user_id, referrer_id, action])
 
-# === Webhook หลัก LINE ===
+    if action == "ใช้งานฟรี":
+        logs = logs_sheet.get_all_records()
+        count = sum(1 for r in logs if r["user_id"] == user_id and r["action"] == "ใช้งานฟรี")
+        if count % 5 == 0:
+            send_invite_friend_flex(user_id, count)
+
+# === webhook ===
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
     for event in data.get("events", []):
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
-
         if event["type"] != "message" or event["message"]["type"] != "text":
             send_line_message(reply_token, "❌ รองรับเฉพาะข้อความภาษาไทยเท่านั้น")
             return jsonify({"status": "ignored"})
 
         message_text = event["message"]["text"].strip()
-        if not is_thai(message_text):
+        if not re.search(r'[\u0E00-\u0E7F]', message_text):
             send_line_message(reply_token, "📌 กรุณาพิมพ์เป็นภาษาไทยเท่านั้น")
             return jsonify({"status": "non_thai"})
 
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังทำนาย รอสักครู่...")
-        threading.Thread(target=handle_fortune, args=(user_id, message_text)).start()
-
+        threading.Thread(target=lambda: push_line_message(user_id, get_fortune(message_text))).start()
+        log_usage(user_id, "ใช้งานฟรี", message_text)
     return jsonify({"status": "ok"})
+
+# === แชร์สำเร็จ ===
+@app.route("/shared")
+def shared():
+    referrer = request.args.get("referrer")
+    user_id = request.args.get("user_id")
+    if not referrer or not user_id:
+        return "❌ ต้องแนบ referrer และ user_id"
+
+    if has_shared_before(user_id, referrer):
+        return "📌 คุณเคยแชร์ลิงก์นี้ไปแล้ว"
+
+    log_usage(user_id, "ได้สิทธิ์จากการแชร์", "referral", referrer)
+    return "✅ รับสิทธิ์เรียบร้อยแล้ว ขอบคุณที่แชร์!"
+
+# === หน้า LIFF ดึง user_id ===
+@app.route("/liff-share")
+def liff_share():
+    return render_template("liff_share.html", public_url=PUBLIC_URL)
 
 @app.route("/")
 def home():
-    return "Duangjit AI พร้อมใช้งาน"
+    return "Duangjit AI Ready"
 
 application = app
 
