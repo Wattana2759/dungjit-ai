@@ -16,6 +16,7 @@ LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
+LIFF_ID = os.getenv("LIFF_ID")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 openai.api_key = OPENAI_API_KEY
 
@@ -84,7 +85,7 @@ def send_invite_friend_flex(user_id, count):
                         "type": "button", "style": "primary",
                         "action": {
                             "type": "uri", "label": "แชร์ให้เพื่อน",
-                            "uri": f"{PUBLIC_URL}/shared?referrer={user_id}"
+                            "uri": f"{PUBLIC_URL}/liff-share?referrer={user_id}"
                         }
                     }
                 ]
@@ -146,14 +147,32 @@ def shared():
     log_usage(user_id, "ได้สิทธิ์จากการแชร์", "referral", referrer)
     return "✅ รับสิทธิ์เรียบร้อยแล้ว ขอบคุณที่แชร์!"
 
-# === หน้า LIFF ดึง user_id ===
+# === หน้า LIFF ดึง user_id และ redirect ไปยัง /shared
 @app.route("/liff-share")
 def liff_share():
-    return render_template("liff_share.html", public_url=PUBLIC_URL)
+    return f"""
+    <!DOCTYPE html>
+    <html lang='th'>
+    <head><meta charset='UTF-8'><title>แชร์ลิงก์เชิญเพื่อน</title>
+    <script src='https://static.line-scdn.net/liff/edge/2/sdk.js'></script></head>
+    <body><h2>กำลังสร้างลิงก์เชิญเพื่อน...</h2><p>โปรดรอสักครู่</p>
+    <script>
+      async function main() {
+        await liff.init({ liffId: '{LIFF_ID}' });
+        if (!liff.isLoggedIn()) { liff.login(); return; }
+        const profile = await liff.getProfile();
+        const userId = profile.userId;
+        const urlParams = new URLSearchParams(window.location.search);
+        const referrer = urlParams.get('referrer');
+        window.location.href = `{PUBLIC_URL}/shared?referrer=${{referrer}}&user_id=${{userId}}`;
+      }
+      main();
+    </script>
+    </body></html>
+    """
 
 @app.route("/")
 def home():
     return "Duangjit AI Ready"
 
 application = app
-
