@@ -1,21 +1,29 @@
-from flask import Flask, request, jsonify, render_template, Response, redirect
-import os, requests, re
+from flask import Flask, request, jsonify, render_template, Response
+import os
+import requests
 from datetime import datetime
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
+import openai
 
 # === LOAD ENV ===
 load_dotenv()
 app = Flask(__name__)
 
-# === ENV CONFIG ===
+# === ENV & CONFIG ===
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
+SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
-# === GOOGLE SHEETS ===
+openai.api_key = OPENAI_API_KEY
+
+# === GOOGLE SHEETS SETUP ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 service_account_info = {
     "type": os.getenv("GOOGLE_TYPE"),
@@ -32,110 +40,79 @@ service_account_info = {
 creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
 gc = gspread.authorize(creds)
 users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
+logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 
-# === USER MANAGEMENT ===
-def get_user(user_id):
-    records = users_sheet.get_all_records()
-    for i, row in enumerate(records):
-        if row["user_id"] == user_id:
-            return row, i + 2
-    return None, None
+# === BASIC AUTH ===
+def require_basic_auth():
+    auth = request.authorization
+    if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
+        return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
 
-def update_user(user_id, usage=None, quota=None):
-    _, row = get_user(user_id)
-    if row:
-        if usage is not None: users_sheet.update_cell(row, 3, usage)
-        if quota is not None: users_sheet.update_cell(row, 4, quota)
+# === LINE FUNCTIONS ===
+def send_line_message(reply_token, text):
+    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-def add_or_update_user(user_id, name, added_quota, ref):
-    user, row = get_user(user_id)
-    now = datetime.now().isoformat()
-    if user:
-        new_quota = int(user["paid_quota"]) + added_quota
-        users_sheet.update(f"C{row}:F{row}", [[user["usage"], new_quota, ref, now]])
-    else:
-        users_sheet.append_row([user_id, name, 0, added_quota, ref, now])
-
-# === LINE MESSAGES ===
 def push_line_message(user_id, text):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
-    response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
-    print("LINE Text Response:", response.status_code, response.text)
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
-def send_share_to_friend(user_id):
-    share_url = f"{PUBLIC_URL}/shared?user_id={user_id}&redirect=1"
-    message = {
-        "type": "template",
-        "altText": "\U0001F517 แชร์บอทเพื่อรับสิทธิ์",
-        "template": {
-            "type": "buttons",
-            "thumbnailImageUrl": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750647481/banner_dnubfn.png",
-            "title": "แชร์บอทให้เพื่อน",
-            "text": "กดปุ่มเพื่อแชร์ พร้อมรับสิทธิ์ฟรี 1 ครั้งทันที!",
-            "actions": [
-                {
-                    "type": "uri",
-                    "label": "\U0001F4E4 แชร์และรับสิทธิ์",
-                    "uri": share_url
-                }
-            ]
-        }
-    }
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    body = {"to": user_id, "messages": [message]}
-    response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
-    print("LINE Template Response:", response.status_code, response.text)
+# === AI หมอดูไทย ===
+def get_fortune(message):
+    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message["content"].strip()
+    except Exception as e:
+        return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
-# === WEBHOOK ===
+# === LOGGING ===
+def log_usage(user_id, action, detail):
+    now = datetime.now().isoformat()
+    logs_sheet.append_row([now, user_id, action, detail])
+
+# === ROUTES ===
+@app.route("/")
+def home():
+    return "ดวงจิต AI พร้อมใช้งานฟรีแล้ว 🎉"
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
     for event in data.get("events", []):
-        event_type = event["type"]
+        if event["type"] != "message" or event["message"]["type"] != "text":
+            continue
+
+        reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
-
-        if event_type != "message" or event["message"]["type"] != "text":
-            continue
-
         message_text = event["message"]["text"].strip()
-        user, _ = get_user(user_id)
 
-        if not user or int(user["paid_quota"]) <= int(user["usage"]):
-            push_line_message(user_id, "\U0001F4CD คุณยังไม่มีสิทธิ์ใช้งาน")
-            send_share_to_friend(user_id)
-            continue
-
-        reply = f"คุณถาม: {message_text}\nหมอตอบ: ยังไม่ได้เชื่อม AI จริง"
-        push_line_message(user_id, reply)
-        update_user(user_id, usage=int(user["usage"]) + 1)
+        reply = get_fortune(message_text)
+        send_line_message(reply_token, reply)
+        log_usage(user_id, "ใช้งานฟรี", message_text)
 
     return jsonify({"status": "ok"})
 
-# === SHARE + REDIRECT ===
-@app.route("/shared")
-def shared_link_clicked():
-    user_id = request.args.get("user_id")
-    do_redirect = request.args.get("redirect") == "1"
+@app.route("/admin")
+def admin_dashboard():
+    auth = require_basic_auth()
+    if auth: return auth
+    records = users_sheet.get_all_records()
+    return render_template("admin_dashboard.html", users=records)
 
-    if not user_id:
-        return "Missing user_id", 400
+@app.route("/test-sheet")
+def test_sheet():
+    try:
+        data = users_sheet.get_all_records()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
-    user, row = get_user(user_id)
-    if not user:
-        return "User not found", 404
-
-    current_quota = int(user["paid_quota"])
-    users_sheet.update_cell(row, 4, current_quota + 1)
-    push_line_message(user_id, "\U0001F381 คุณได้รับสิทธิ์เพิ่ม 1 ครั้งแล้ว ขอบคุณที่แชร์บอท \U0001F64F")
-
-    if do_redirect:
-        line_oa_id = "@duangjitai"
-        share_text = f"\U0001F52E มาดูดวงแม่น ๆ กับหมอดู AI ได้ที่นี่ \u2192 https://line.me/R/oaMessage/{line_oa_id}/?ref={user_id}"
-        encoded_url = f"https://line.me/R/msg/text/?{requests.utils.quote(share_text)}"
-        return f"""<html><head><meta http-equiv=\"refresh\" content=\"0; url={encoded_url}\" /></head><body>Redirecting...</body></html>"""
-
-    return "✅ Shared successfully"
-
+# === EXPORT FOR RENDER ===
 application = app
 
