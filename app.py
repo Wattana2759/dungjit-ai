@@ -86,7 +86,7 @@ def send_invite_friend_flex(user_id, count):
             "type": "bubble",
             "hero": {
                 "type": "image",
-                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1710000000/share_banner_friends.png",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750824745/ChatGPT_Image_25_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_11_10_18_mr9phf.png",
                 "size": "full",
                 "aspectRatio": "16:9",
                 "aspectMode": "cover"
@@ -105,7 +105,7 @@ def send_invite_friend_flex(user_id, count):
                     },
                     {
                         "type": "text",
-                        "text": "แชร์บอทนี้ให้เพื่อน แล้วรับสิทธิ์พิเศษใช้งานฟรีเพิ่ม 🎁",
+                        "text": "แชร์บอทนี้ให้เพื่อน แล้วรับสิทธิ์ใช้งานฟรีเพิ่ม 🎁",
                         "wrap": True,
                         "size": "md",
                         "color": "#666666"
@@ -147,13 +147,10 @@ def log_usage(user_id, action, detail):
     now = datetime.now().isoformat()
     try:
         logs_sheet.append_row([now, user_id, action, detail])
-
         logs = logs_sheet.get_all_records()
         count = sum(1 for row in logs if row["user_id"] == user_id and row["action"] == "ใช้งานฟรี")
-
         if count > 0 and count % 5 == 0:
             send_invite_friend_flex(user_id, count)
-
     except Exception as e:
         print("Log error:", e)
 
@@ -171,7 +168,6 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
-
     for event in data.get("events", []):
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
@@ -181,7 +177,6 @@ def webhook():
             return jsonify({"status": "ignored_non_text"})
 
         message_text = event["message"]["text"].strip()
-
         if not is_thai(message_text):
             send_line_message(reply_token, "📌 ระบบรองรับเฉพาะข้อความภาษาไทยเท่านั้น")
             return jsonify({"status": "ignored_non_thai"})
