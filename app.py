@@ -72,13 +72,19 @@ def get_fortune(message):
     except Exception as e:
         return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
-# === LOGGING (รันใน thread แยก) ===
+# === LOGGING (เร็ว) ===
 def log_usage(user_id, action, detail):
     now = datetime.now().isoformat()
     try:
         logs_sheet.append_row([now, user_id, action, detail])
     except Exception as e:
         print("Log error:", e)
+
+# === ทำนายและตอบกลับแบบ background ===
+def handle_fortune(user_id, message_text):
+    reply = get_fortune(message_text)
+    push_line_message(user_id, reply)
+    log_usage(user_id, "ใช้งานฟรี", message_text)
 
 # === ROUTES ===
 @app.route("/")
@@ -88,6 +94,7 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
+
     for event in data.get("events", []):
         if event["type"] != "message" or event["message"]["type"] != "text":
             continue
@@ -96,16 +103,11 @@ def webhook():
         user_id = event["source"]["userId"]
         message_text = event["message"]["text"].strip()
 
-        # ✅ ตอบกลับทันที: หมอดูกำลังทำนาย
+        # ✅ ตอบกลับทันทีใน 1 วิ
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังทำนาย รอสักครู่...")
 
-        # ✅ รอ GPT แล้วส่ง push ตามหลัง
-        def reply_later():
-            reply = get_fortune(message_text)
-            push_line_message(user_id, reply)
-            log_usage(user_id, "ใช้งานฟรี", message_text)
-
-        threading.Thread(target=reply_later).start()
+        # ✅ ทำงาน GPT ใน thread แยก
+        threading.Thread(target=handle_fortune, args=(user_id, message_text)).start()
 
     return jsonify({"status": "ok"})
 
