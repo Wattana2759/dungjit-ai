@@ -1,178 +1,180 @@
-# ✅ app.py: พร้อมระบบแชร์เพื่อน ป้องกันการโกง + LIFF ดึง user_id อัตโนมัติ
-from flask import Flask, request, jsonify, render_template, redirect
-import os, requests, re, threading
+from flask import Flask, request, jsonify, render_template, Response
+import os
+import requests
 from datetime import datetime
 from dotenv import load_dotenv
+from PIL import Image
+import pytesseract
 import gspread
 from google.oauth2.service_account import Credentials
+import re
 import openai
+import json
 
 # === LOAD ENV ===
 load_dotenv()
 app = Flask(__name__)
 
-# === CONFIG ===
+# === ENV & CONFIG ===
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
-SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
+SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS", "Users")
+SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS", "Logs")
 LIFF_ID = os.getenv("LIFF_ID")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
+
 openai.api_key = OPENAI_API_KEY
 
 # === GOOGLE SHEETS SETUP ===
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-service_account_info = {
+creds_dict = {
     "type": os.getenv("GOOGLE_TYPE"),
     "project_id": os.getenv("GOOGLE_PROJECT_ID"),
     "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
-    "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace('\\n', '\n'),
+    "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace("\\n", "\n"),
     "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
     "client_id": os.getenv("GOOGLE_CLIENT_ID"),
     "auth_uri": os.getenv("GOOGLE_AUTH_URI"),
     "token_uri": os.getenv("GOOGLE_TOKEN_URI"),
     "auth_provider_x509_cert_url": os.getenv("GOOGLE_AUTH_PROVIDER_X509_CERT_URL"),
-    "client_x509_cert_url": os.getenv("GOOGLE_CLIENT_X509_CERT_URL"),
+    "client_x509_cert_url": os.getenv("GOOGLE_CLIENT_X509_CERT_URL")
 }
-creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
-gc = gspread.authorize(creds)
-logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
+creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+client = gspread.authorize(creds)
+users_sheet = client.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
+logs_sheet = client.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 
-# === LINE ===
+# === UTILITIES ===
 def send_line_message(reply_token, text):
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": text}]
+    }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-def push_line_message(user_id, text):
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
+def is_thai_text(text):
+    return bool(re.search(r'[\u0E00-\u0E7F]', text))
 
-# === หมอดู AI ===
+def find_or_create_user(user_id):
+    users = users_sheet.get_all_records()
+    for idx, user in enumerate(users):
+        if user["user_id"] == user_id:
+            return idx + 2
+    users_sheet.append_row([user_id, 5, 0, 0, ""])
+    return len(users) + 2
+
+# === AI หมอดูไทย ===
 def get_fortune(message):
-    prompt = f"คุณคือหมอดูไทยโบราณ\n\nถาม: {message}\nตอบ:"
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.choices[0].message["content"].strip()
-    except Exception as e:
-        return f"เกิดข้อผิดพลาด: {str(e)}"
+    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: \"{message}\"\nคำตอบของหมอดู:"""
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response["choices"][0]["message"]["content"]
 
-# === ระบบแชร์ ===
-def send_invite_friend_flex(user_id, count):
-    flex = {
-        "type": "flex",
-        "altText": "🎉 ครบ 5 ครั้ง แชร์เพื่อรับสิทธิ์เพิ่ม!",
-        "contents": {
-            "type": "bubble",
-            "hero": {
-                "type": "image",
-                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1750824745/ChatGPT_Image_25_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_11_10_18_mr9phf.png",
-                "size": "full", "aspectMode": "cover"
-            },
-            "body": {
-                "type": "box", "layout": "vertical", "contents": [
-                    {"type": "text", "text": "ครบ 5 ครั้งแล้ว!", "weight": "bold", "size": "xl"},
-                    {"type": "text", "text": "แชร์บอทนี้ให้เพื่อน รับสิทธิ์ใช้งานฟรีเพิ่ม!", "size": "sm"}
-                ]
-            },
-            "footer": {
-                "type": "box", "layout": "vertical", "contents": [
-                    {
-                        "type": "button", "style": "primary",
-                        "action": {
-                            "type": "uri", "label": "แชร์ให้เพื่อน",
-                            "uri": f"{PUBLIC_URL}/liff-share?referrer={user_id}"
-                        }
-                    }
-                ]
-            }
-        }
-    }
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex]})
-
-def has_shared_before(user_id, referrer_id):
-    logs = logs_sheet.get_all_records()
-    for row in logs:
-        if row.get("user_id") == user_id and row.get("referrer_id") == referrer_id:
-            return True
-    return False
-
-def log_usage(user_id, action, detail, referrer_id=""):
-    now = datetime.now().isoformat()
-    logs_sheet.append_row([now, user_id, referrer_id, action])
-
-    if action == "ใช้งานฟรี":
-        logs = logs_sheet.get_all_records()
-        count = sum(1 for r in logs if r["user_id"] == user_id and r["action"] == "ใช้งานฟรี")
-        if count % 5 == 0:
-            send_invite_friend_flex(user_id, count)
-
-# === webhook ===
+# === ROUTES ===
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.json
-    for event in data.get("events", []):
+    data = request.get_json()
+    for event in data["events"]:
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
-        if event["type"] != "message" or event["message"]["type"] != "text":
-            send_line_message(reply_token, "❌ รองรับเฉพาะข้อความภาษาไทยเท่านั้น")
-            return jsonify({"status": "ignored"})
 
-        message_text = event["message"]["text"].strip()
-        if not re.search(r'[\u0E00-\u0E7F]', message_text):
-            send_line_message(reply_token, "📌 กรุณาพิมพ์เป็นภาษาไทยเท่านั้น")
-            return jsonify({"status": "non_thai"})
+        if event["type"] != "message":
+            send_line_message(reply_token, "ระบบรองรับเฉพาะข้อความเท่านั้น 📩")
+            return "ok"
+
+        msg_type = event["message"]["type"]
+        if msg_type != "text":
+            send_line_message(reply_token, "ระบบรองรับเฉพาะข้อความเท่านั้น 🛑")
+            return "ok"
+
+        text = event["message"]["text"]
+        if not is_thai_text(text):
+            send_line_message(reply_token, "ระบบรองรับเฉพาะข้อความภาษาไทยเท่านั้น 🇹🇭")
+            return "ok"
+
+        row = find_or_create_user(user_id)
+        values = users_sheet.row_values(row)
+        quota = int(values[1])
+        used = int(values[2])
+
+        if quota <= 0:
+            share_url = f"{PUBLIC_URL}/liff-share?referrer={user_id}"
+            send_line_message(reply_token, f"คุณใช้สิทธิ์ครบแล้ว 🎯\nแชร์ลิงก์นี้เพื่อรับสิทธิ์ฟรี:\n{share_url}")
+            return "ok"
 
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังทำนาย รอสักครู่...")
-        threading.Thread(target=lambda: push_line_message(user_id, get_fortune(message_text))).start()
-        log_usage(user_id, "ใช้งานฟรี", message_text)
-    return jsonify({"status": "ok"})
 
-# === แชร์สำเร็จ ===
-@app.route("/shared")
-def shared():
-    referrer = request.args.get("referrer")
-    user_id = request.args.get("user_id")
-    if not referrer or not user_id:
-        return "❌ ต้องแนบ referrer และ user_id"
+        answer = get_fortune(text)
 
-    if has_shared_before(user_id, referrer):
-        return "📌 คุณเคยแชร์ลิงก์นี้ไปแล้ว"
+        requests.post("https://api.line.me/v2/bot/message/push", headers={
+            "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }, json={
+            "to": user_id,
+            "messages": [{"type": "text", "text": answer}]
+        })
 
-    log_usage(user_id, "ได้สิทธิ์จากการแชร์", "referral", referrer)
-    return "✅ รับสิทธิ์เรียบร้อยแล้ว ขอบคุณที่แชร์!"
+        users_sheet.update_cell(row, 2, quota - 1)
+        users_sheet.update_cell(row, 3, used + 1)
+        logs_sheet.append_row([datetime.now().isoformat(), user_id, text, answer])
 
-# === หน้า LIFF ดึง user_id และ redirect ไปยัง /shared
+    return "ok"
+
 @app.route("/liff-share")
 def liff_share():
-    return f"""
-    <!DOCTYPE html>
-    <html lang='th'>
-    <head><meta charset='UTF-8'><title>แชร์ลิงก์เชิญเพื่อน</title>
-    <script src='https://static.line-scdn.net/liff/edge/2/sdk.js'></script></head>
-    <body><h2>กำลังสร้างลิงก์เชิญเพื่อน...</h2><p>โปรดรอสักครู่</p>
-    <script>
-      async function main() {
-        await liff.init({ liffId: '{LIFF_ID}' });
-        if (!liff.isLoggedIn()) { liff.login(); return; }
-        const profile = await liff.getProfile();
-        const userId = profile.userId;
-        const urlParams = new URLSearchParams(window.location.search);
-        const referrer = urlParams.get('referrer');
-        window.location.href = `{PUBLIC_URL}/shared?referrer=${{referrer}}&user_id=${{userId}}`;
-      }
-      main();
-    </script>
-    </body></html>
-    """
+    referrer = request.args.get("referrer", "")
+    return render_template("liff_share.html", liff_id=LIFF_ID, public_url=PUBLIC_URL, referrer=referrer)
 
-@app.route("/")
-def home():
-    return "Duangjit AI Ready"
+@app.route("/shared")
+def shared():
+    user_id = request.args.get("user_id")
+    referrer = request.args.get("referrer")
 
-application = app
+    if not user_id or not referrer or user_id == referrer:
+        return "Invalid or duplicate share"
+
+    users = users_sheet.get_all_records()
+    user_row = find_or_create_user(user_id)
+    ref_row = find_or_create_user(referrer)
+
+    shared_from = users_sheet.row_values(user_row)[4]
+    if referrer in shared_from.split(","):
+        return "คุณได้รับสิทธิ์จากลิงก์นี้แล้ว"
+
+    ref_quota = int(users_sheet.row_values(ref_row)[1])
+    ref_shared = int(users_sheet.row_values(ref_row)[3])
+    users_sheet.update_cell(ref_row, 2, ref_quota + 1)
+    users_sheet.update_cell(ref_row, 4, ref_shared + 1)
+
+    new_from = shared_from + "," + referrer if shared_from else referrer
+    users_sheet.update_cell(user_row, 5, new_from)
+
+    return "✅ ขอบคุณสำหรับการแชร์! ได้รับสิทธิ์เรียบร้อยแล้ว"
+
+@app.route("/usage-summary")
+def usage_summary():
+    user_id = request.args.get("user_id")
+    if not user_id:
+        return "Missing user_id"
+
+    rows = users_sheet.get_all_records()
+    match = next((row for row in rows if row.get("user_id") == user_id), None)
+    if not match:
+        return "ไม่พบข้อมูลผู้ใช้นี้"
+
+    return render_template("usage_summary.html",
+                           user_id=user_id,
+                           quota=match.get("quota", 0),
+                           used=match.get("used", 0),
+                           shared=match.get("shared", 0))
+
+if __name__ == "__main__":
+    app.run(debug=True)
+

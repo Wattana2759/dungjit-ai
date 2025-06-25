@@ -4,11 +4,16 @@
 <head>
   <meta charset="UTF-8">
   <title>แชร์ลิงก์เชิญเพื่อน</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
-<body>
-  <h2>กำลังสร้างลิงก์เชิญเพื่อน...</h2>
-  <p>โปรดรอสักครู่</p>
+<body class="bg-gradient-to-br from-purple-100 to-pink-100 h-screen flex flex-col items-center justify-center text-center">
+  <div class="bg-white p-6 rounded-2xl shadow-lg max-w-md w-full">
+    <h1 class="text-xl font-bold text-purple-600">🎉 แชร์ลิงก์รับสิทธิ์ฟรี</h1>
+    <p class="mt-2 text-sm text-gray-600">ระบบกำลังตรวจสอบบัญชีของคุณและเตรียมลิงก์แชร์...</p>
+    <div id="status" class="mt-4 text-sm text-blue-500">กำลังโหลด...</div>
+  </div>
 
   <script>
     async function main() {
@@ -20,69 +25,17 @@
 
       const profile = await liff.getProfile();
       const userId = profile.userId;
+      const urlParams = new URLSearchParams(window.location.search);
+      const referrer = urlParams.get("referrer");
 
-      const shareLink = "{{ public_url }}/shared?ref=" + encodeURIComponent(userId);
-
-      // สร้างข้อความสำหรับแชร์
-      const result = await liff.shareTargetPicker([{
-        type: "flex",
-        altText: "📢 มาใช้งานหมอดู ดวงจิต AI กันเถอะ!",
-        contents: {
-          type: "bubble",
-          hero: {
-            type: "image",
-            url: "https://res.cloudinary.com/dwg28idpf/image/upload/v1750824745/ChatGPT_Image_25_%E0%B8%A1%E0%B8%B4.%E0%B8%A2._2568_11_10_18_mr9phf.png",
-            size: "full",
-            aspectRatio: "20:13",
-            aspectMode: "cover"
-          },
-          body: {
-            type: "box",
-            layout: "vertical",
-            contents: [
-              {
-                type: "text",
-                text: "🔮 ดวงจิต AI หมอดูอัจฉริยะ",
-                weight: "bold",
-                size: "lg"
-              },
-              {
-                type: "text",
-                text: "คลิกเพื่อใช้งานฟรีทันที!",
-                size: "sm",
-                wrap: true
-              }
-            ]
-          },
-          footer: {
-            type: "box",
-            layout: "vertical",
-            spacing: "sm",
-            contents: [
-              {
-                type: "button",
-                style: "primary",
-                action: {
-                  type: "uri",
-                  label: "👉 เริ่มใช้งาน",
-                  uri: shareLink
-                }
-              }
-            ]
-          }
-        }
-      }]);
-
-      if (result) {
-        alert("✅ แชร์สำเร็จ ขอบคุณมาก!");
-        liff.closeWindow();
-      } else {
-        alert("❌ ยกเลิกการแชร์");
-        liff.closeWindow();
-      }
+      document.getElementById("status").innerText = "✅ สำเร็จ กำลังพาไปยังหน้ารับสิทธิ์...";
+      setTimeout(() => {
+        window.location.href = `{{ public_url }}/shared?referrer=${referrer}&user_id=${userId}`;
+      }, 1000);
     }
 
     main();
   </script>
 </body>
 </html>
+
