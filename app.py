@@ -7,6 +7,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import openai
 import threading
+import re
 
 # === LOAD ENV ===
 load_dotenv()
@@ -80,6 +81,11 @@ def log_usage(user_id, action, detail):
     except Exception as e:
         print("Log error:", e)
 
+# === ฟังก์ชันตรวจสอบข้อความภาษาไทย + ตัวเลขเท่านั้น ===
+def is_valid_thai_text(text):
+    pattern = r'^[\u0E00-\u0E7F0-9\s\.\,\?\!]+$'
+    return bool(re.match(pattern, text))
+
 # === ROUTES ===
 @app.route("/")
 def home():
@@ -89,17 +95,26 @@ def home():
 def webhook():
     data = request.json
     for event in data.get("events", []):
-        if event["type"] != "message" or event["message"]["type"] != "text":
+        if event["type"] != "message":
             continue
 
+        message_type = event["message"]["type"]
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
+
+        # ป้องกันสื่ออื่นที่ไม่ใช่ข้อความ
+        if message_type != "text":
+            send_line_message(reply_token, "📌 กรุณาพิมพ์ข้อความเป็นภาษาไทยเท่านั้น เช่น ถามเรื่องดวง ความฝัน หรือโชคลาภ")
+            continue
+
         message_text = event["message"]["text"].strip()
 
-        # ✅ ตอบกลับทันที: หมอดูกำลังทำนาย
+        if not is_valid_thai_text(message_text):
+            send_line_message(reply_token, "📌 โปรดใช้เฉพาะข้อความภาษาไทย หรือเลขเท่านั้น เช่น \"ฝันเห็นงู\" หรือ \"ดวงการเงินวันนี้\"")
+            continue
+
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังทำนาย รอสักครู่...")
 
-        # ✅ รอ GPT แล้วส่ง push ตามหลัง
         def reply_later():
             reply = get_fortune(message_text)
             push_line_message(user_id, reply)
