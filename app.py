@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
 import openai
+import threading
 
 # === LOAD ENV ===
 load_dotenv()
@@ -61,7 +62,7 @@ def push_line_message(user_id, text):
 
 # === AI หมอดูไทย ===
 def get_fortune(message):
-    prompt = f"""คุณคือหมอดูไทยโบราณ ผู้มีญาณหยั่งรู้ พูดจาเคร่งขรึม สุภาพ ตอบคำถามเรื่องดวงชะตา ความรัก การเงิน และความฝัน\n\nผู้ใช้ถาม: "{message}"\nคำตอบของหมอดู:"""
+    prompt = f"""คุณคือหมอดูไทยโบราณ พูดจาสุภาพ ตอบคำถามเรื่องดวง ความรัก การเงิน หรือความฝัน\n\nถาม: "{message}"\nตอบ:"""
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o",
@@ -71,10 +72,13 @@ def get_fortune(message):
     except Exception as e:
         return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
-# === LOGGING ===
+# === LOGGING (รันใน thread แยก) ===
 def log_usage(user_id, action, detail):
     now = datetime.now().isoformat()
-    logs_sheet.append_row([now, user_id, action, detail])
+    try:
+        logs_sheet.append_row([now, user_id, action, detail])
+    except Exception as e:
+        print("Log error:", e)
 
 # === ROUTES ===
 @app.route("/")
@@ -92,9 +96,16 @@ def webhook():
         user_id = event["source"]["userId"]
         message_text = event["message"]["text"].strip()
 
-        reply = get_fortune(message_text)
-        send_line_message(reply_token, reply)
-        log_usage(user_id, "ใช้งานฟรี", message_text)
+        # ✅ ตอบกลับทันที: หมอดูกำลังทำนาย
+        send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังทำนาย รอสักครู่...")
+
+        # ✅ รอ GPT แล้วส่ง push ตามหลัง
+        def reply_later():
+            reply = get_fortune(message_text)
+            push_line_message(user_id, reply)
+            log_usage(user_id, "ใช้งานฟรี", message_text)
+
+        threading.Thread(target=reply_later).start()
 
     return jsonify({"status": "ok"})
 
