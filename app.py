@@ -7,6 +7,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import openai
 import threading
+import re
 
 # === LOAD ENV ===
 load_dotenv()
@@ -60,6 +61,10 @@ def push_line_message(user_id, text):
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
+# === ตรวจสอบภาษาไทย ===
+def is_thai(text):
+    return bool(re.search(r'[\u0E00-\u0E7F]', text))
+
 # === AI หมอดูไทย ===
 def get_fortune(message):
     prompt = f"""คุณคือหมอดูไทยโบราณ พูดจาสุภาพ ตอบคำถามเรื่องดวง ความรัก การเงิน หรือความฝัน\n\nถาม: "{message}"\nตอบ:"""
@@ -72,11 +77,83 @@ def get_fortune(message):
     except Exception as e:
         return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
-# === LOGGING (เร็ว) ===
+# === Flex Message เชิญเพิ่มเพื่อน ===
+def send_invite_friend_flex(user_id, count):
+    flex_message = {
+        "type": "flex",
+        "altText": f"🎉 ใช้งานครบ {count} ครั้ง! แชร์บอทนี้ให้เพื่อนเลย",
+        "contents": {
+            "type": "bubble",
+            "hero": {
+                "type": "image",
+                "url": "https://res.cloudinary.com/dwg28idpf/image/upload/v1710000000/share_banner_friends.png",
+                "size": "full",
+                "aspectRatio": "16:9",
+                "aspectMode": "cover"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": f"🎉 คุณใช้ครบ {count} ครั้งแล้ว!",
+                        "weight": "bold",
+                        "size": "xl",
+                        "wrap": True
+                    },
+                    {
+                        "type": "text",
+                        "text": "แชร์บอทนี้ให้เพื่อน แล้วรับสิทธิ์พิเศษใช้งานฟรีเพิ่ม 🎁",
+                        "wrap": True,
+                        "size": "md",
+                        "color": "#666666"
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "color": "#1DB446",
+                        "action": {
+                            "type": "uri",
+                            "label": "📎 แชร์ให้เพื่อน",
+                            "uri": "https://line.me/R/nv/addFriends?alias=duangjitai"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
+    headers = {
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={
+        "to": user_id,
+        "messages": [flex_message]
+    })
+
+# === LOGGING และเช็กทุก 5 ครั้ง ===
 def log_usage(user_id, action, detail):
     now = datetime.now().isoformat()
     try:
         logs_sheet.append_row([now, user_id, action, detail])
+
+        logs = logs_sheet.get_all_records()
+        count = sum(1 for row in logs if row["user_id"] == user_id and row["action"] == "ใช้งานฟรี")
+
+        if count > 0 and count % 5 == 0:
+            send_invite_friend_flex(user_id, count)
+
     except Exception as e:
         print("Log error:", e)
 
@@ -96,17 +173,20 @@ def webhook():
     data = request.json
 
     for event in data.get("events", []):
-        if event["type"] != "message" or event["message"]["type"] != "text":
-            continue
-
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
+
+        if event["type"] != "message" or event["message"]["type"] != "text":
+            send_line_message(reply_token, "❌ ขออภัย ระบบรองรับเฉพาะข้อความเท่านั้น")
+            return jsonify({"status": "ignored_non_text"})
+
         message_text = event["message"]["text"].strip()
 
-        # ✅ ตอบกลับทันทีใน 1 วิ
-        send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังทำนาย รอสักครู่...")
+        if not is_thai(message_text):
+            send_line_message(reply_token, "📌 ระบบรองรับเฉพาะข้อความภาษาไทยเท่านั้น")
+            return jsonify({"status": "ignored_non_thai"})
 
-        # ✅ ทำงาน GPT ใน thread แยก
+        send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังทำนาย รอสักครู่...")
         threading.Thread(target=handle_fortune, args=(user_id, message_text)).start()
 
     return jsonify({"status": "ok"})
