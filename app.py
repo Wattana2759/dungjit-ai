@@ -10,6 +10,7 @@ import threading
 import re
 import json
 from bs4 import BeautifulSoup
+import time
 
 # === LOAD ENV ===
 load_dotenv()
@@ -21,6 +22,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
+SHEET_NAME_SUBS = os.getenv("SHEET_NAME_SUBS", "Subscribers")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
@@ -44,6 +46,7 @@ creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPE
 gc = gspread.authorize(creds)
 users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
 logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
+subs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_SUBS)
 
 # === BASIC AUTH ===
 def require_basic_auth():
@@ -80,7 +83,7 @@ def get_fortune(message):
     except Exception as e:
         return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
-# === LOGGING (รันใน thread แยก) ===
+# === LOGGING ===
 def log_usage(user_id, action, detail):
     now = datetime.now().isoformat()
     try:
@@ -88,12 +91,14 @@ def log_usage(user_id, action, detail):
     except Exception as e:
         print("Log error:", e)
 
-# === ฟังก์ชันตรวจสอบข้อความภาษาไทย + ตัวเลขเท่านั้น ===
-def is_valid_thai_text(text):
-    pattern = r'^[\u0E00-\u0E7F0-9\s\.\,\?\!]+$'
-    return bool(re.match(pattern, text))
+def log_lucky_fail():
+    now = datetime.now().isoformat()
+    try:
+        logs_sheet.append_row([now, "SYSTEM", "lucky_error", "ดึงเลขเด็ดไม่สำเร็จ"])
+    except Exception as e:
+        print("Log error:", e)
 
-# === FLEX LUCKY ===
+# === FLEX ===
 def build_lucky_flex(lucky_data):
     bubbles = []
     for name, info in lucky_data.items():
@@ -125,16 +130,16 @@ def build_lucky_flex(lucky_data):
     }
     return json.dumps(flex_message, ensure_ascii=False)
 
-# === FETCH LUCKY ===
-cache = {"data": None, "last_update": datetime.min}
+# === FETCH ===
+cache = {"data": None, "last_update": datetime.min, "last_sent_date": None}
 
-def fetch_lucky_auto(user_id=None):
+def fetch_lucky_auto():
     now = datetime.now()
     if cache["data"] and now - cache["last_update"] < timedelta(hours=6):
         return cache["data"]
 
     try:
-        r = requests.get("https://www.dailynews.co.th/news/2533714/", timeout=10)
+        r = requests.get("https://www.dailynews.co.th/news/2533714/", timeout=5)
         soup = BeautifulSoup(r.text, "html.parser")
         content = soup.get_text()
         data = {}
@@ -164,18 +169,31 @@ def fetch_lucky_auto(user_id=None):
                 'three': f1.group(3).split()
             }
 
-        if not data:
-            raise ValueError("ไม่พบข้อมูลเลขเด็ดในหน้าเว็บ")
-
         cache.update({"data": data, "last_update": now})
         return data
 
     except Exception as e:
-        error_msg = f"❌ ดึงเลขเด็ดไม่สำเร็จ: {str(e)}"
-        print(error_msg)
-        if user_id:
-            threading.Thread(target=log_usage, args=(user_id, "ดึงเลขเด็ดล้มเหลว", str(e))).start()
+        log_lucky_fail()
         return cache["data"] or {}
+
+# === SUBSCRIBE NOTIFY ===
+def notify_new_lucky():
+    now = datetime.now()
+    if cache["last_sent_date"] == now.strftime("%Y-%m-%d"):
+        return
+    lucky_data = fetch_lucky_auto()
+    if not lucky_data:
+        return
+
+    users = subs_sheet.col_values(1)[1:]
+    for uid in users:
+        try:
+            send_flex_lucky_numbers(uid, lucky_data)
+        except:
+            pass
+    cache["last_sent_date"] = now.strftime("%Y-%m-%d")
+
+threading.Thread(target=lambda: [time.sleep(10), notify_new_lucky()]).start()
 
 # === ROUTES ===
 @app.route("/")
@@ -186,54 +204,33 @@ def home():
 def webhook():
     data = request.json
     for event in data.get("events", []):
-        if event["type"] != "message":
-            continue
-
-        message_type = event["message"]["type"]
+        if event["type"] != "message": continue
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
+        msg = event["message"].get("text", "").strip()
 
-        if message_type != "text":
-            send_line_message(reply_token, "📌 กรุณาพิมพ์ข้อความเป็นภาษาไทยเท่านั้น เช่น ถามเรื่องดวง ความฝัน หรือโชคลาภ")
-            continue
-
-        message_text = event["message"]["text"].strip()
-
-        if not is_valid_thai_text(message_text):
-            send_line_message(reply_token, "📌 โปรดใช้เฉพาะข้อความภาษาไทย หรือเลขเท่านั้น เช่น \"ฝันเห็นงู\" หรือ \"ดวงการเงินวันนี้\"")
-            continue
-
-        if message_text == "เลขเด็ดงวดนี้":
+        if msg == "เลขเด็ดงวดนี้":
+            lucky_data = fetch_lucky_auto()
             send_line_message(reply_token, "📥 กำลังดึงเลขเด็ดล่าสุด...")
-            lucky_data = fetch_lucky_auto(user_id)
-            if not lucky_data:
-                send_line_message(reply_token, "❌ ไม่พบเลขเด็ดงวดนี้ ลองใหม่ภายหลัง")
-                continue
             send_flex_lucky_numbers(user_id, lucky_data)
-            threading.Thread(target=log_usage, args=(user_id, "ขอเลขเด็ด", "สำเร็จ")).start()
+            subs = subs_sheet.col_values(1)
+            if user_id not in subs:
+                subs_sheet.append_row([user_id])
+            log_usage(user_id, "เลขเด็ด", "ขอเลขเด็ดงวดนี้")
             continue
 
-        elif re.match(r'^\d{2,3}$', message_text):
-            lucky_data = fetch_lucky_auto(user_id)
-            num = message_text
-            hit = []
-            for name, info in lucky_data.items():
-                if num in info.get("two", []) or num in info.get("three", []) or num in info.get("chup", []):
-                    hit.append(f"✅ {name} มีเลขนี้!")
-            if hit:
-                send_line_message(reply_token, f"🔍 ตรวจเลข {num} พบว่า:\n" + "\n".join(hit))
-            else:
-                send_line_message(reply_token, f"❌ ไม่พบเลข {num} ในเลขเด็ดงวดนี้")
+        elif re.match(r'^\d{2,3}$', msg):
+            lucky_data = fetch_lucky_auto()
+            hits = []
+            for k,v in lucky_data.items():
+                if msg in v.get("two", []) or msg in v.get("three", []) or msg in v.get("chup", []):
+                    hits.append(f"✅ {k} มีเลขนี้!")
+            reply = "\n".join(hits) if hits else f"❌ ไม่พบเลข {msg} ในเลขเด็ดงวดนี้"
+            send_line_message(reply_token, reply)
             continue
 
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังทำนาย รอสักครู่...")
-
-        def reply_later():
-            reply = get_fortune(message_text)
-            push_line_message(user_id, reply)
-            log_usage(user_id, "ใช้งานฟรี", message_text)
-
-        threading.Thread(target=reply_later).start()
+        threading.Thread(target=lambda: [push_line_message(user_id, get_fortune(msg)), log_usage(user_id, "หมอดูฟรี", msg)]).start()
 
     return jsonify({"status": "ok"})
 
@@ -247,10 +244,8 @@ def admin_dashboard():
 @app.route("/test-sheet")
 def test_sheet():
     try:
-        data = users_sheet.get_all_records()
-        return jsonify({"status": "success", "data": data})
+        return jsonify({"status": "success", "data": users_sheet.get_all_records()})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-# === EXPORT FOR RENDER ===
 application = app
