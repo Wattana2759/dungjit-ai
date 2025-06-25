@@ -128,13 +128,13 @@ def build_lucky_flex(lucky_data):
 # === FETCH LUCKY ===
 cache = {"data": None, "last_update": datetime.min}
 
-def fetch_lucky_auto():
+def fetch_lucky_auto(user_id=None):
     now = datetime.now()
     if cache["data"] and now - cache["last_update"] < timedelta(hours=6):
         return cache["data"]
 
     try:
-        r = requests.get("https://www.dailynews.co.th/news/2533714/")
+        r = requests.get("https://www.dailynews.co.th/news/2533714/", timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
         content = soup.get_text()
         data = {}
@@ -164,10 +164,17 @@ def fetch_lucky_auto():
                 'three': f1.group(3).split()
             }
 
+        if not data:
+            raise ValueError("ไม่พบข้อมูลเลขเด็ดในหน้าเว็บ")
+
         cache.update({"data": data, "last_update": now})
         return data
 
     except Exception as e:
+        error_msg = f"❌ ดึงเลขเด็ดไม่สำเร็จ: {str(e)}"
+        print(error_msg)
+        if user_id:
+            threading.Thread(target=log_usage, args=(user_id, "ดึงเลขเด็ดล้มเหลว", str(e))).start()
         return cache["data"] or {}
 
 # === ROUTES ===
@@ -197,16 +204,17 @@ def webhook():
             continue
 
         if message_text == "เลขเด็ดงวดนี้":
-            lucky_data = fetch_lucky_auto()
+            send_line_message(reply_token, "📥 กำลังดึงเลขเด็ดล่าสุด...")
+            lucky_data = fetch_lucky_auto(user_id)
             if not lucky_data:
-                send_line_message(reply_token, "❌ ขออภัย ไม่สามารถดึงเลขเด็ดงวดนี้ได้ในขณะนี้")
-            else:
-                send_line_message(reply_token, "📥 กำลังดึงเลขเด็ดล่าสุด...")
-                send_flex_lucky_numbers(user_id, lucky_data)
+                send_line_message(reply_token, "❌ ไม่พบเลขเด็ดงวดนี้ ลองใหม่ภายหลัง")
+                continue
+            send_flex_lucky_numbers(user_id, lucky_data)
+            threading.Thread(target=log_usage, args=(user_id, "ขอเลขเด็ด", "สำเร็จ")).start()
             continue
 
         elif re.match(r'^\d{2,3}$', message_text):
-            lucky_data = fetch_lucky_auto()
+            lucky_data = fetch_lucky_auto(user_id)
             num = message_text
             hit = []
             for name, info in lucky_data.items():
@@ -246,4 +254,3 @@ def test_sheet():
 
 # === EXPORT FOR RENDER ===
 application = app
-
