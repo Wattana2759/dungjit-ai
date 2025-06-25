@@ -20,8 +20,6 @@ GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
-ADMIN_USER = os.getenv("ADMIN_USER", "admin")
-ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
 openai.api_key = OPENAI_API_KEY
 
@@ -41,16 +39,9 @@ service_account_info = {
 }
 creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
 gc = gspread.authorize(creds)
-users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
 logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 
-# === BASIC AUTH ===
-def require_basic_auth():
-    auth = request.authorization
-    if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
-        return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
-
-# === LINE FUNCTIONS ===
+# === LINE MESSAGE ===
 def send_line_message(reply_token, text):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
     body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
@@ -61,13 +52,13 @@ def push_line_message(user_id, text):
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
-# === ตรวจสอบภาษาไทย ===
+# === ภาษาไทยเท่านั้น ===
 def is_thai(text):
     return bool(re.search(r'[\u0E00-\u0E7F]', text))
 
-# === AI หมอดูไทย ===
+# === หมอดู AI ===
 def get_fortune(message):
-    prompt = f"""คุณคือหมอดูไทยโบราณ พูดจาสุภาพ ตอบคำถามเรื่องดวง ความรัก การเงิน หรือความฝัน\n\nถาม: "{message}"\nตอบ:"""
+    prompt = f"คุณคือหมอดูไทยโบราณที่ตอบเรื่องดวง ความรัก การเงิน ความฝัน อย่างสุภาพ\n\nถาม: {message}\nตอบ:"
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o",
@@ -75,13 +66,23 @@ def get_fortune(message):
         )
         return response.choices[0].message["content"].strip()
     except Exception as e:
-        return f"ขออภัย ระบบหมอดู AI ขัดข้อง: {str(e)}"
+        return f"ขออภัย ระบบขัดข้อง: {str(e)}"
 
-# === Flex Message เชิญเพิ่มเพื่อน ===
+# === LOG และให้สิทธิ์เมื่อครบ 5 ครั้ง ===
+def log_usage(user_id, action, detail):
+    now = datetime.now().isoformat()
+    logs_sheet.append_row([now, user_id, action, detail])
+
+    logs = logs_sheet.get_all_records()
+    count = sum(1 for row in logs if row["user_id"] == user_id and row["action"] == "ใช้งานฟรี")
+    if count > 0 and count % 5 == 0:
+        send_invite_friend_flex(user_id, count)
+
+# === แชร์ Flex Message ===
 def send_invite_friend_flex(user_id, count):
     flex_message = {
         "type": "flex",
-        "altText": f"🎉 ใช้งานครบ {count} ครั้ง! แชร์บอทนี้ให้เพื่อนเลย",
+        "altText": f"🎉 ครบ {count} ครั้ง! แชร์บอทนี้ให้เพื่อนเลย",
         "contents": {
             "type": "bubble",
             "hero": {
@@ -94,37 +95,22 @@ def send_invite_friend_flex(user_id, count):
             "body": {
                 "type": "box",
                 "layout": "vertical",
-                "spacing": "md",
                 "contents": [
-                    {
-                        "type": "text",
-                        "text": f"🎉 คุณใช้ครบ {count} ครั้งแล้ว!",
-                        "weight": "bold",
-                        "size": "xl",
-                        "wrap": True
-                    },
-                    {
-                        "type": "text",
-                        "text": "แชร์บอทนี้ให้เพื่อน แล้วรับสิทธิ์ใช้งานฟรีเพิ่ม 🎁",
-                        "wrap": True,
-                        "size": "md",
-                        "color": "#666666"
-                    }
+                    {"type": "text", "text": f"คุณใช้ครบ {count} ครั้งแล้ว!", "weight": "bold", "size": "xl"},
+                    {"type": "text", "text": "แชร์ให้เพื่อนแล้วรับสิทธิ์ใช้งานฟรีเพิ่ม 🎁", "size": "sm", "wrap": True}
                 ]
             },
             "footer": {
                 "type": "box",
                 "layout": "vertical",
-                "spacing": "sm",
                 "contents": [
                     {
                         "type": "button",
                         "style": "primary",
-                        "color": "#1DB446",
                         "action": {
                             "type": "uri",
                             "label": "📎 แชร์ให้เพื่อน",
-                            "uri": "https://line.me/R/nv/addFriends?alias=duangjitai"
+                            "uri": f"{PUBLIC_URL}/shared?referrer={user_id}"
                         }
                     }
                 ]
@@ -132,39 +118,26 @@ def send_invite_friend_flex(user_id, count):
         }
     }
 
-    headers = {
-        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={"to": user_id, "messages": [flex_message]})
 
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json={
-        "to": user_id,
-        "messages": [flex_message]
-    })
-
-# === LOGGING และเช็กทุก 5 ครั้ง ===
-def log_usage(user_id, action, detail):
-    now = datetime.now().isoformat()
-    try:
-        logs_sheet.append_row([now, user_id, action, detail])
-        logs = logs_sheet.get_all_records()
-        count = sum(1 for row in logs if row["user_id"] == user_id and row["action"] == "ใช้งานฟรี")
-        if count > 0 and count % 5 == 0:
-            send_invite_friend_flex(user_id, count)
-    except Exception as e:
-        print("Log error:", e)
-
-# === ทำนายและตอบกลับแบบ background ===
+# === ดำเนินการทำนายใน thread ===
 def handle_fortune(user_id, message_text):
     reply = get_fortune(message_text)
     push_line_message(user_id, reply)
     log_usage(user_id, "ใช้งานฟรี", message_text)
 
-# === ROUTES ===
-@app.route("/")
-def home():
-    return "ดวงจิต AI พร้อมใช้งานฟรีแล้ว 🎉"
+# === แชร์ลิงก์สำเร็จ รับสิทธิ์ ===
+@app.route("/shared")
+def shared():
+    referrer_id = request.args.get("referrer")
+    if not referrer_id:
+        return "ลิงก์ไม่ถูกต้อง"
+    now = datetime.now().isoformat()
+    logs_sheet.append_row([now, referrer_id, "ได้สิทธิ์จากการแชร์", "referral"])
+    return "✅ ระบบรับทราบว่าคุณแชร์แล้ว! ได้รับสิทธิ์เพิ่ม 1 ครั้ง"
 
+# === Webhook หลัก LINE ===
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
@@ -173,34 +146,22 @@ def webhook():
         user_id = event["source"]["userId"]
 
         if event["type"] != "message" or event["message"]["type"] != "text":
-            send_line_message(reply_token, "❌ ขออภัย ระบบรองรับเฉพาะข้อความเท่านั้น")
-            return jsonify({"status": "ignored_non_text"})
+            send_line_message(reply_token, "❌ รองรับเฉพาะข้อความภาษาไทยเท่านั้น")
+            return jsonify({"status": "ignored"})
 
         message_text = event["message"]["text"].strip()
         if not is_thai(message_text):
-            send_line_message(reply_token, "📌 ระบบรองรับเฉพาะข้อความภาษาไทยเท่านั้น")
-            return jsonify({"status": "ignored_non_thai"})
+            send_line_message(reply_token, "📌 กรุณาพิมพ์เป็นภาษาไทยเท่านั้น")
+            return jsonify({"status": "non_thai"})
 
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังทำนาย รอสักครู่...")
         threading.Thread(target=handle_fortune, args=(user_id, message_text)).start()
 
     return jsonify({"status": "ok"})
 
-@app.route("/admin")
-def admin_dashboard():
-    auth = require_basic_auth()
-    if auth: return auth
-    records = users_sheet.get_all_records()
-    return render_template("admin_dashboard.html", users=records)
+@app.route("/")
+def home():
+    return "Duangjit AI พร้อมใช้งาน"
 
-@app.route("/test-sheet")
-def test_sheet():
-    try:
-        data = users_sheet.get_all_records()
-        return jsonify({"status": "success", "data": data})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
-# === EXPORT FOR RENDER ===
 application = app
 
