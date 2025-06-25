@@ -198,8 +198,11 @@ def webhook():
 
         if message_text == "เลขเด็ดงวดนี้":
             lucky_data = fetch_lucky_auto()
-            send_line_message(reply_token, "📥 กำลังดึงเลขเด็ดล่าสุด...")
-            send_flex_lucky_numbers(user_id, lucky_data)
+            if not lucky_data:
+                send_line_message(reply_token, "❌ ขออภัย ไม่สามารถดึงเลขเด็ดงวดนี้ได้ในขณะนี้")
+            else:
+                send_line_message(reply_token, "📥 กำลังดึงเลขเด็ดล่าสุด...")
+                send_flex_lucky_numbers(user_id, lucky_data)
             continue
 
         elif re.match(r'^\d{2,3}$', message_text):
@@ -243,3 +246,4 @@ def test_sheet():
 
 # === EXPORT FOR RENDER ===
 application = app
+
