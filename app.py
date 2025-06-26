@@ -42,7 +42,6 @@ service_account_info = {
 creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
 gc = gspread.authorize(creds)
 
-# ตรวจสอบว่าเปิด sheet ได้หรือไม่
 try:
     users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
 except Exception as e:
@@ -55,12 +54,6 @@ except Exception as e:
     logs_sheet = None
     print("❌ ไม่พบ Logs Sheet:", e)
 
-# === BASIC AUTH ===
-def require_basic_auth():
-    auth = request.authorization
-    if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
-        return Response("กรุณาเข้าสู่ระบบ", 401, {"WWW-Authenticate": "Basic realm='Admin Access'"})
-
 # === LINE FUNCTIONS ===
 def send_line_message(reply_token, text):
     headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}", "Content-Type": "application/json"}
@@ -72,12 +65,44 @@ def push_line_message(user_id, text):
     body = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
-# === AI หมอดูไทย ===
+# === ตรวจสอบข้อความไทย ===
+def is_valid_thai_text(text):
+    pattern = r'^[\u0E00-\u0E7F0-9\s\.\,\?\!]+$'
+    return bool(re.match(pattern, text))
+
+# === ตรวจสอบวันเกิดแบบไทย ===
+def is_thai_birthdate(text):
+    pattern = r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$'
+    match = re.match(pattern, text)
+    if match:
+        day, month, year = map(int, match.groups())
+        return 1 <= day <= 31 and 1 <= month <= 12 and 2400 <= year <= 2600
+    return False
+
+# === AI ทำนายดวงวันเกิด ===
+def get_fortune_from_birthdate(birthdate_text):
+    prompt = f"""
+คุณคือหมอดูไทยโบราณ ผู้เชี่ยวชาญในการดูดวงชะตาจากวันเดือนปีเกิดตามหลักโหราศาสตร์ไทย เช่น ปีนักษัตร วันเกิด ลัคนา จุดเด่น จุดอ่อน และคำเตือน
+
+ผู้ใช้เกิดวันที่: {birthdate_text}
+
+โปรดวิเคราะห์ดวงชะตาโดยละเอียด พร้อมคำแนะนำเสริมดวง เช่น การทำบุญ การสวดมนต์ และข้อคิดให้กำลังใจ โดยใช้ภาษาไทยที่สุภาพ ชัดเจน และเข้าใจง่าย
+"""
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message["content"].strip()
+    except Exception as e:
+        return f"⚠️ ข้อผิดพลาดการทำนายวันเกิด: {str(e)}"
+
+# === AI หมอดูทั่วไป ===
 def get_fortune(message):
     prompt = f"""
 คุณคือหมอดูไทยโบราณ ผู้เชี่ยวชาญในศาสตร์หลากหลายแขนง ทั้งดวงความรัก การเงิน โชคลาภ การงาน สุขภาพ การทำนายฝัน การเสริมดวง และการทำบุญตามแบบไทยโบราณ
 
-กรุณาวิเคราะห์คำถามของผู้ถาม และเลือกใช้ศาสตร์ที่เหมาะสมที่สุดในการให้คำตอบ พร้อมให้คำแนะนำอย่างนุ่มนวล สุภาพ อิงหลักความเชื่อไทย เช่น วันเกิด เลขมงคล บุญกรรม การไหว้พระ และข้อคิดที่ดี
+กรุณาวิเคราะห์คำถามของผู้ถามและเลือกใช้ศาสตร์ที่เหมาะสมที่สุดในการให้คำตอบ พร้อมให้คำแนะนำอย่างนุ่มนวล สุภาพ อิงหลักความเชื่อไทย เช่น วันเกิด เลขมงคล บุญกรรม การไหว้พระ และข้อคิดที่ดี
 
 คำถาม: "{message}"
 
@@ -96,20 +121,16 @@ def get_fortune(message):
 
 กรุณาตอบเป็นภาษาไทยเท่านั้น โดยเน้นความแม่นยำ เข้าใจง่าย สร้างกำลังใจ แก่ผู้ถาม
 """
-
-
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
         )
         return response.choices[0].message["content"].strip()
-    except openai.error.OpenAIError as e:
-        return f"⚠️ ระบบหมอดู AI ขัดข้อง: {str(e)}"
     except Exception as e:
-        return f"⚠️ ข้อผิดพลาดไม่คาดคิด: {str(e)}"
+        return f"⚠️ ระบบหมอดู AI ขัดข้อง: {str(e)}"
 
-# === LOGGING (แยก Thread) ===
+# === LOG ===
 def log_usage(user_id, action, detail):
     now = datetime.now().isoformat()
     if logs_sheet:
@@ -118,22 +139,13 @@ def log_usage(user_id, action, detail):
         except Exception as e:
             print("Log error:", e)
 
-# === ตรวจสอบข้อความไทย + เลข ===
-def is_valid_thai_text(text):
-    pattern = r'^[\u0E00-\u0E7F0-9\s\.\,\?\!]+$'
-    return bool(re.match(pattern, text))
-
-# === ฟังก์ชันแชร์ลิงก์ให้เพื่อน ===
+# === เชิญเพื่อน ===
 def send_invite_link(user_id):
     link = f"{PUBLIC_URL}/shared?user_id={user_id}"
     text = f"""🎁 เชิญเพื่อนของคุณมาใช้หมอดู AI 'ดวงจิต'\n\nแชร์ลิงก์นี้ให้เพื่อน:\n{link}\n\nเมื่อเพื่อนกดลิงก์นี้ คุณจะได้รับสิทธิ์ฟรีทันที 💬"""
     push_line_message(user_id, text)
 
-# === ROUTES ===
-@app.route("/")
-def home():
-    return "ดวงจิต AI พร้อมใช้งานฟรีแล้ว 🎉"
-
+# === WEBHOOK ===
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if not request.is_json:
@@ -149,7 +161,7 @@ def webhook():
         user_id = event["source"]["userId"]
 
         if message_type != "text":
-            send_line_message(reply_token, "📌 กรุณาพิมพ์ข้อความเป็นภาษาไทยเท่านั้น เช่น ถามเรื่องดวง ความฝัน ความรัก การเงิน การงาน โชคลาภ หรือ เลขเด็ดวันนี้")
+            send_line_message(reply_token, "📌 กรุณาพิมพ์ข้อความเป็นภาษาไทย เช่น ถามเรื่องดวง ความฝัน หรือวันเกิด")
             continue
 
         message_text = event["message"]["text"].strip()
@@ -158,53 +170,21 @@ def webhook():
             send_invite_link(user_id)
             continue
 
-        if not is_valid_thai_text(message_text):
-            send_line_message(reply_token, "📌 โปรดใช้เฉพาะข้อความภาษาไทย หรือเลขเท่านั้น เช่น ถามเรื่องดวง ความฝัน ความรัก การเงิน การงาน โชคลาภ หรือ เลขเด็ดวันนี้")
+        if not is_valid_thai_text(message_text) and not is_thai_birthdate(message_text):
+            send_line_message(reply_token, "📌 โปรดพิมพ์ข้อความเป็นภาษาไทย หรือระบุวันเกิด เช่น 17-10-2536")
             continue
 
-        send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังวิเคราะห์ และ ทำนาย รอสักครู่...")
+        send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังวิเคราะห์ และทำนาย รอสักครู่...")
 
         def reply_later():
-            reply = get_fortune(message_text)
+            if is_thai_birthdate(message_text):
+                reply = get_fortune_from_birthdate(message_text)
+            else:
+                reply = get_fortune(message_text)
             push_line_message(user_id, reply)
             log_usage(user_id, "ใช้งานฟรี", message_text)
 
         threading.Thread(target=reply_later).start()
 
     return jsonify({"status": "ok"})
-
-@app.route("/shared")
-def shared_page():
-    user_id = request.args.get("user_id")
-    return f"""<h2>🙏 ขอบคุณที่เข้าร่วม!</h2>
-<p>คุณถูกเชิญโดยผู้ใช้ <code>{user_id}</code></p>
-<p>หากคุณเพิ่ม LINE Official Account: <b>@duangjitai</b> แล้ว คุณจะได้รับสิทธิ์ทำนายฟรี</p>"""
-
-@app.route("/admin")
-def admin_dashboard():
-    auth = require_basic_auth()
-    if auth: return auth
-    if users_sheet:
-        records = users_sheet.get_all_records()
-        return render_template("admin_dashboard.html", users=records)
-    else:
-        return "❌ Users Sheet ยังไม่พร้อมใช้งาน", 500
-
-@app.route("/test-sheet")
-def test_sheet():
-    try:
-        if users_sheet:
-            data = users_sheet.get_all_records()
-            return jsonify({"status": "success", "data": data})
-        else:
-            return jsonify({"status": "error", "message": "Users Sheet ยังไม่พร้อมใช้งาน"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
-# === RUN APP (For Render) ===
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
-
-# === EXPORT FOR RENDER ===
-application = app
 
