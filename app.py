@@ -7,6 +7,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import openai
 import threading
+import time
 import re
 
 # === LOAD ENV ===
@@ -198,7 +199,25 @@ def webhook():
 
     return jsonify({"status": "ok"})
 
-# === รัน Local / Render ===
+# === Health Check Endpoint สำหรับ Ping ===
+@app.route("/healthz")
+def healthz():
+    return "OK", 200
+
+# === AUTO-PING ป้องกัน Render สลีป (ใช้เฉพาะ Free Plan) ===
+def auto_ping():
+    while True:
+        try:
+            ping_url = f"{PUBLIC_URL}/healthz"
+            print(f"🔁 Auto-ping: {ping_url}")
+            requests.get(ping_url, timeout=10)
+        except Exception as e:
+            print("⚠️ Ping error:", e)
+        time.sleep(300)  # ทุก 5 นาที
+
+threading.Thread(target=auto_ping, daemon=True).start()
+
+# === Run Server ===
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
 
