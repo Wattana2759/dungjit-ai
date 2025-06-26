@@ -172,28 +172,35 @@ def webhook():
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลัง วิเคราะห์ และทำนาย กรุณารอสักครู่...")
 
         def reply_later():
-            match = re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message)
-            reply = get_fortune_from_birthdate(normalize_birthdate(match.group())) if match else get_fortune(message)
-            push_line_message(user_id, reply)
-            log_usage(user_id, "ใช้งานฟรี", message)
+    match = re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message)
+    reply = get_fortune_from_birthdate(normalize_birthdate(match.group())) if match else get_fortune(message)
+    push_line_message(user_id, reply)
+    log_usage(user_id, "ใช้งานฟรี", message)
 
-            try:
-                records = users_sheet.get_all_records()
-                for i, row in enumerate(records, start=2):
-                    if row["user_id"] == user_id:
-                        usage = int(row.get("usage", 0))
-                        invite_sent = str(row.get("invite_sent", "")).lower().strip()
-                        if usage >= 5 and invite_sent != "true":
-                            text = (
-                                " ขอบคุณที่ใช้งานหมอดู AI 'ดวงจิต' บ่อยมาก!\n"
-                                "เพื่อสนับสนุนเรา ขอเชิญคุณช่วยแชร์ลิงก์เพิ่มเพื่อนให้เพื่อนของคุณ "
-                                "เพิ่มเพื่อนที่นี่เลย  https://lin.ee/7LgReP1"
-                            )
-                            push_line_message(user_id, text)
-                            users_sheet.update_cell(i, 7, "TRUE")
-                        break
-            except Exception as e:
-                print(" invite check error:", e)
+    try:
+        records = users_sheet.get_all_records()
+        for i, row in enumerate(records, start=2):
+            if row["user_id"] == user_id:
+                question_count = int(row.get("question_count", 0)) + 1
+                invite_sent = str(row.get("invite_sent", "")).lower().strip()
+
+                users_sheet.update_cell(i, 4, question_count)  # column D = question_count
+
+                if question_count >= 5 and invite_sent != "true":
+                    text = (
+                        "📢 ขอบคุณที่ใช้งาน ดวงจิตหมอดู AI บ่อย!\n"
+                        "เพื่อสนับสนุนเรา ขอเชิญคุณช่วยแชร์ลิงก์เพิ่มเพื่อนให้เพื่อนของคุณ "
+                        "เพิ่มเพื่อนที่นี่เลย 👉 https://lin.ee/7LgReP1"
+                    )
+                    push_line_message(user_id, text)
+                    users_sheet.update_cell(i, 5, "TRUE")  # column E = invite_sent
+                break
+        else:
+            # ถ้ายังไม่มี user_id นี้เลย → เพิ่มใหม่
+            users_sheet.append_row([user_id, "", "", 1, ""])  # column D = question_count = 1
+    except Exception as e:
+        print("invite check error:", e)
+
 
         threading.Thread(target=reply_later).start()
 
