@@ -21,6 +21,8 @@ GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 SHEET_NAME_USERS = os.getenv("SHEET_NAME_USERS")
 SHEET_NAME_LOGS = os.getenv("SHEET_NAME_LOGS")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5000")
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "1234")
 
 openai.api_key = OPENAI_API_KEY
 
@@ -45,13 +47,13 @@ try:
     users_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_USERS)
 except Exception as e:
     users_sheet = None
-    print("\u274c \u0e44\u0e21\u0e48\u0e1e\u0e1a Users Sheet:", e)
+    print("❌ ไม่พบ Users Sheet:", e)
 
 try:
     logs_sheet = gc.open_by_key(GOOGLE_SHEET_ID).worksheet(SHEET_NAME_LOGS)
 except Exception as e:
     logs_sheet = None
-    print("\u274c \u0e44\u0e21\u0e48\u0e1e\u0e1a Logs Sheet:", e)
+    print("❌ ไม่พบ Logs Sheet:", e)
 
 # === LINE FUNCTIONS ===
 def send_line_message(reply_token, text):
@@ -150,8 +152,8 @@ def log_usage(user_id, action, detail):
 @app.route("/webhook", methods=["POST"])
 def webhook():
     if not request.is_json:
-        return jsonify({"error": "Invalid content"}), 400
-
+        return jsonify({"status": "error", "message": "Content-Type must be application/json"}), 400
+        
     data = request.json
     for event in data.get("events", []):
         if event["type"] != "message":
@@ -161,18 +163,18 @@ def webhook():
         user_id = event["source"]["userId"]
         message = event["message"].get("text", "").strip()
 
-        if not message:
-            send_line_message(reply_token, "\ud83d\udccc กรุณาพิมพ์คำถามหรือวันเกิด เช่น 17/10/2536")
+        if not message_text:
+            send_line_message(reply_token, "📌 กรุณาพิมพ์ข้อความเป็นภาษาไทย เช่น ถามเรื่องดวง ความฝัน ความรัก หรือ ชื่อวันเดือนปีเกิด หรือ เลขเด็ดวันนี้")
             continue
 
-        if not is_valid_thai_text(message) and not re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message):
-            send_line_message(reply_token, "\ud83d\udccc โปรดพิมพ์ข้อความเป็นภาษาไทย เช่น ดวง ความรัก หรือวันเกิด 1/1/2520")
+        if not is_valid_thai_text(message_text) and not re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message_text):
+            send_line_message(reply_token, "📌 โปรดพิมพ์ข้อความเป็นภาษาไทย เช่น ถามเรื่องดวง ความฝัน ความรัก หรือ ชื่อวันเดือนปีเกิด หรือ เลขเด็ดวันนี้")
             continue
 
-        send_line_message(reply_token, "\ud83d\udd2e กำลังดูดวงให้คุณ กรุณารอสักครู่...")
+        send_line_message(reply_token, "🧘‍♀️ หมอดูกำลัง วิเคราะห์ และทำนาย กรุณารอสักครู่...")
 
         def reply_later():
-            match = re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message)
+            match = re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message_text)
             reply = get_fortune_from_birthdate(normalize_birthdate(match.group())) if match else get_fortune(message)
             push_line_message(user_id, reply)
             log_usage(user_id, "ใช้งานฟรี", message)
@@ -185,15 +187,15 @@ def webhook():
                         invite_sent = str(row.get("invite_sent", "")).lower().strip()
                         if usage >= 5 and invite_sent != "true":
                             text = (
-                                "\ud83d\ude4f ขอบคุณที่ใช้งานหมอดู AI 'ดวงจิต' บ่อยมาก!\n"
-                                "เพื่อสนับสนุนเรา ขอเชิญคุณช่วยแชร์ลิงก์เพิ่มเพื่อนให้เพื่อนของคุณ \ud83d\udcac\n\n"
-                                "เพิ่มเพื่อนที่นี่เลย \ud83d\udc49 https://lin.ee/7LgReP1"
+                                " ขอบคุณที่ใช้งานหมอดู AI 'ดวงจิต' บ่อยมาก!\n"
+                                "เพื่อสนับสนุนเรา ขอเชิญคุณช่วยแชร์ลิงก์เพิ่มเพื่อนให้เพื่อนของคุณ "
+                                "เพิ่มเพื่อนที่นี่เลย  https://lin.ee/7LgReP1"
                             )
                             push_line_message(user_id, text)
                             users_sheet.update_cell(i, 7, "TRUE")
                         break
             except Exception as e:
-                print("\u274c invite check error:", e)
+                print(" invite check error:", e)
 
         threading.Thread(target=reply_later).start()
 
@@ -209,9 +211,9 @@ def auto_ping():
     while True:
         try:
             requests.get(f"{PUBLIC_URL}/healthz", timeout=10)
-            print("\ud83d\udd01 Auto-ping sent")
+            print("🔁 Auto-ping sent")
         except Exception as e:
-            print("\u26a0\ufe0f Auto-ping error:", e)
+            print("⚠️ Auto-ping error:", e)
         time.sleep(300)
 
 threading.Thread(target=auto_ping, daemon=True).start()
