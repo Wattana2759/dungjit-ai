@@ -128,7 +128,6 @@ def get_fortune(message):
 
 ให้ตอบเป็นภาษาไทยทั้งหมด
 """
-
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o",
@@ -137,8 +136,8 @@ def get_fortune(message):
         return response.choices[0].message["content"].strip()
     except Exception as e:
         return f"⚠️ ระบบหมอดู AI ขัดข้อง: {str(e)}"
-        
-# === บันทึกการใช้งาน ===
+
+# === LOG USAGE ===
 def log_usage(user_id, action, detail):
     if logs_sheet:
         try:
@@ -151,7 +150,7 @@ def log_usage(user_id, action, detail):
 def webhook():
     if not request.is_json:
         return jsonify({"status": "error", "message": "Content-Type must be application/json"}), 400
-        
+
     data = request.json
     for event in data.get("events", []):
         if event["type"] != "message":
@@ -162,45 +161,43 @@ def webhook():
         message = event["message"].get("text", "").strip()
 
         if not message:
-            send_line_message(reply_token, "📌 กรุณาพิมพ์ข้อความเป็นภาษาไทย เช่น ถามเรื่องดวง ความฝัน ความรัก หรือ ชื่อวันเดือนปีเกิด หรือ เลขเด็ดวันนี้")
+            send_line_message(reply_token, "📌 กรุณาพิมพ์ข้อความเป็นภาษาไทย หรือระบุวันเกิด")
             continue
 
         if not is_valid_thai_text(message) and not re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message):
-            send_line_message(reply_token, "📌 โปรดพิมพ์ข้อความเป็นภาษาไทย เช่น ถามเรื่องดวง ความฝัน ความรัก หรือ ชื่อวันเดือนปีเกิด หรือ เลขเด็ดวันนี้")
+            send_line_message(reply_token, "📌 โปรดพิมพ์ข้อความเป็นภาษาไทย หรือระบุวันเกิด")
             continue
 
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลัง วิเคราะห์ และทำนาย กรุณารอสักครู่...")
 
         def reply_later():
-    match = re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message)
-    reply = get_fortune_from_birthdate(normalize_birthdate(match.group())) if match else get_fortune(message)
-    push_line_message(user_id, reply)
-    log_usage(user_id, "ใช้งานฟรี", message)
+            match = re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message)
+            reply = get_fortune_from_birthdate(normalize_birthdate(match.group())) if match else get_fortune(message)
+            push_line_message(user_id, reply)
+            log_usage(user_id, "ใช้งานฟรี", message)
 
-    try:
-        records = users_sheet.get_all_records()
-        for i, row in enumerate(records, start=2):
-            if row["user_id"] == user_id:
-                question_count = int(row.get("question_count", 0)) + 1
-                invite_sent = str(row.get("invite_sent", "")).lower().strip()
+            try:
+                records = users_sheet.get_all_records()
+                for i, row in enumerate(records, start=2):
+                    if row["user_id"] == user_id:
+                        question_count = int(row.get("question_count", 0)) + 1
+                        invite_sent = str(row.get("invite_sent", "")).lower().strip()
 
-                users_sheet.update_cell(i, 4, question_count)  # column D = question_count
+                        users_sheet.update_cell(i, 4, question_count)
 
-                if question_count >= 5 and invite_sent != "true":
-                    text = (
-                        "📢 ขอบคุณที่ใช้งาน ดวงจิตหมอดู AI บ่อย!\n"
-                        "เพื่อสนับสนุนเรา ขอเชิญคุณช่วยแชร์ลิงก์เพิ่มเพื่อนให้เพื่อนของคุณ "
-                        "เพิ่มเพื่อนที่นี่เลย 👉 https://lin.ee/7LgReP1"
-                    )
-                    push_line_message(user_id, text)
-                    users_sheet.update_cell(i, 5, "TRUE")  # column E = invite_sent
-                break
-        else:
-            # ถ้ายังไม่มี user_id นี้เลย → เพิ่มใหม่
-            users_sheet.append_row([user_id, "", "", 1, ""])  # column D = question_count = 1
-    except Exception as e:
-        print("invite check error:", e)
-
+                        if question_count >= 5 and invite_sent != "true":
+                            text = (
+                                "📢 ขอบคุณที่ใช้งาน ดวงจิตหมอดู AI บ่อย!\n"
+                                "เพื่อสนับสนุนเรา ขอเชิญคุณช่วยแชร์ลิงก์เพิ่มเพื่อนให้เพื่อนของคุณ "
+                                "เพิ่มเพื่อนที่นี่เลย 👉 https://lin.ee/7LgReP1"
+                            )
+                            push_line_message(user_id, text)
+                            users_sheet.update_cell(i, 5, "TRUE")
+                        break
+                else:
+                    users_sheet.append_row([user_id, "", "", 1, ""])
+            except Exception as e:
+                print("invite check error:", e)
 
         threading.Thread(target=reply_later).start()
 
@@ -211,7 +208,7 @@ def webhook():
 def healthz():
     return "OK", 200
 
-# === AUTO PING TO PREVENT SLEEP ===
+# === AUTO PING ===
 def auto_ping():
     while True:
         try:
@@ -228,3 +225,4 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
 
 application = app
+
