@@ -163,7 +163,7 @@ def webhook():
         user_id = event["source"]["userId"]
         message = event["message"].get("text", "").strip()
 
-        if not message_text:
+        if not message:
             send_line_message(reply_token, "📌 กรุณาพิมพ์ข้อความเป็นภาษาไทย เช่น ถามเรื่องดวง ความฝัน ความรัก หรือ ชื่อวันเดือนปีเกิด หรือ เลขเด็ดวันนี้")
             continue
 
@@ -174,7 +174,7 @@ def webhook():
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลัง วิเคราะห์ และทำนาย กรุณารอสักครู่...")
 
         def reply_later():
-            match = re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message_text)
+            match = re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', message)
             reply = get_fortune_from_birthdate(normalize_birthdate(match.group())) if match else get_fortune(message)
             push_line_message(user_id, reply)
             log_usage(user_id, "ใช้งานฟรี", message)
