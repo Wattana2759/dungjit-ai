@@ -171,7 +171,7 @@ def webhook():
             continue
 
         if not is_valid_thai_text(message_text) and not is_thai_birthdate(message_text):
-            send_line_message(reply_token, "📌 โปรดพิมพ์ข้อความเป็นภาษาไทย หรือระบุวันเกิด เช่น 17-10-2536")
+            send_line_message(reply_token, "📌 โปรดพิมพ์ข้อความเป็นภาษาไทย หรือระบุวันเกิด")
             continue
 
         send_line_message(reply_token, "🧘‍♀️ หมอดูกำลังวิเคราะห์ และทำนาย รอสักครู่...")
@@ -187,4 +187,12 @@ def webhook():
         threading.Thread(target=reply_later).start()
 
     return jsonify({"status": "ok"})
+    
+    # === รัน Flask แบบปกติ (เฉพาะตอนรัน local) ===
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
+# ✅ สำหรับ Render / Gunicorn ต้องมีบรรทัดนี้
+application = app
+
 
