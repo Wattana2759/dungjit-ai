@@ -70,16 +70,29 @@ def is_valid_thai_text(text):
     pattern = r'^[\u0E00-\u0E7F0-9\s\.\,\?\!]+$'
     return bool(re.match(pattern, text))
 
-# === ตรวจสอบวันเกิดแบบไทย ===
+# === ตรวจสอบวันเกิดไทย รองรับปีแบบย่อ (36 → 2536) ===
 def is_thai_birthdate(text):
-    pattern = r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$'
+    pattern = r'^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$'
     match = re.match(pattern, text)
     if match:
         day, month, year = map(int, match.groups())
+        if year < 100:
+            year += 2500
         return 1 <= day <= 31 and 1 <= month <= 12 and 2400 <= year <= 2600
     return False
 
-# === AI ทำนายดวงวันเกิด ===
+# === แปลงวันเกิดเป็นรูปแบบมาตรฐาน ===
+def normalize_birthdate(text):
+    pattern = r'^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$'
+    match = re.match(pattern, text)
+    if match:
+        day, month, year = map(int, match.groups())
+        if year < 100:
+            year += 2500
+        return f"{day:02d}/{month:02d}/{year}"
+    return text
+
+# === AI ทำนายจากวันเกิด ===
 def get_fortune_from_birthdate(birthdate_text):
     prompt = f"""
 คุณคือหมอดูไทยโบราณ ผู้เชี่ยวชาญในการดูดวงชะตาจากวันเดือนปีเกิดตามหลักโหราศาสตร์ไทย เช่น ปีนักษัตร วันเกิด ลัคนา จุดเด่น จุดอ่อน และคำเตือน
@@ -139,7 +152,7 @@ def log_usage(user_id, action, detail):
         except Exception as e:
             print("Log error:", e)
 
-# === เชิญเพื่อน ===
+# === ส่งลิงก์เชิญเพื่อน ===
 def send_invite_link(user_id):
     link = f"{PUBLIC_URL}/shared?user_id={user_id}"
     text = f"""🎁 เชิญเพื่อนของคุณมาใช้หมอดู AI 'ดวงจิต'\n\nแชร์ลิงก์นี้ให้เพื่อน:\n{link}\n\nเมื่อเพื่อนกดลิงก์นี้ คุณจะได้รับสิทธิ์ฟรีทันที 💬"""
@@ -178,7 +191,8 @@ def webhook():
 
         def reply_later():
             if is_thai_birthdate(message_text):
-                reply = get_fortune_from_birthdate(message_text)
+                normalized = normalize_birthdate(message_text)
+                reply = get_fortune_from_birthdate(normalized)
             else:
                 reply = get_fortune(message_text)
             push_line_message(user_id, reply)
@@ -187,12 +201,11 @@ def webhook():
         threading.Thread(target=reply_later).start()
 
     return jsonify({"status": "ok"})
-    
-    # === รัน Flask แบบปกติ (เฉพาะตอนรัน local) ===
+
+# === รัน Flask แบบ local ===
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
 
-# ✅ สำหรับ Render / Gunicorn ต้องมีบรรทัดนี้
+# ✅ สำหรับ Render / Gunicorn
 application = app
-
 
